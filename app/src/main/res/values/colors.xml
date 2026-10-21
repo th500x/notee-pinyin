@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light set (docs/01-1 §7). values-night/colors.xml holds the dark set under the same names. -->
+    <color name="keyboard_background">#FFE6E8EC</color>
+    <color name="key_background">#FFFFFFFF</color>
+    <color name="key_pressed">#FFC5C9D0</color>
+    <color name="key_function">#FFD2D6DC</color>
+    <color name="key_function_pressed">#FFB3B8C0</color>
+    <color name="key_active">#FFC9DDF7</color>
+    <color name="key_text">#FF1B1C1F</color>
+    <color name="key_hint">#FF7C8088</color>
+    <color name="preedit_text">#FF2F6FD0</color>
+    <color name="strip_divider">#FFC4C8CF</color>
+
+    <!-- Delete keeps its green in both sets. -->
+    <color name="key_delete">#FF3DA35D</color>
+    <color name="key_delete_pressed">#FF2E8249</color>
+    <color name="key_delete_text">#FFFFFFFF</color>
+
+    <color name="ic_launcher_background">#FF2F6FD0</color>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">极拼音</string>
+    <string name="subtype_zh_cn">简体中文</string>
+
+    <string name="setup_title">极拼音</string>
+    <string name="setup_intro">离线拼音输入法。每个音节的前几个字固定不动，盲打也数得清。</string>
+    <string name="setup_step_enable">1. 在系统的输入法列表里打开极拼音</string>
+    <string name="setup_step_switch">2. 切换到极拼音</string>
+    <string name="setup_enable">打开输入法设置</string>
+    <string name="setup_switch">选择输入法</string>
+    <string name="setup_status_off">还没有打开</string>
+    <string name="setup_status_enabled">已打开，还没有切换过来</string>
+    <string name="setup_status_ready">好了，当前输入法就是极拼音。</string>
+    <string name="setup_try_hint">在这里试一下</string>
+    <string name="setup_privacy">完全离线。学到的词、表情次数和最近 5 条剪贴板只存在本机。词库可以自己导出。</string>
+    <string name="setup_privacy_link">隐私政策</string>
+    <string name="setup_privacy_url" translatable="false">https://notee.vip/privacy/notee-pinyin.html</string>
+    <string name="setup_source">源代码</string>
+    <string name="setup_license">GPL-3.0。词库：雾凇拼音（GPL-3.0）。繁体转换表：OpenCC（Apache-2.0）。英文词频：AOSP LatinIME（Apache-2.0）。下一个词：Tatoeba（CC BY 2.0）。</string>
+</resources>

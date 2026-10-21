@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Short, so five toolbar buttons and nine emoji tabs still fit. -->
+    <string name="toolbar_tools">Tools</string>
+    <string name="toolbar_simplified">Hans</string>
+    <string name="toolbar_traditional">Hant</string>
+    <string name="toolbar_layout_qwerty">26-key</string>
+    <string name="toolbar_layout_t9">9-key</string>
+    <string name="toolbar_clipboard">Clips</string>
+    <string name="clipboard_unavailable">This Android version is too old</string>
+
+    <string name="effects_sound">Sound</string>
+    <string name="effects_on">On</string>
+    <string name="effects_off">Off</string>
+    <string name="effects_festival_test">Test</string>
+    <string name="blessing_sign_hint">A name or nickname, or leave blank</string>
+    <string name="blessing_sign_ok">OK</string>
+    <string name="blessing_sign_limit">Up to 10 Chinese characters or 20 letters</string>
+    <string name="blessing_wish_hint">A blessing, or leave blank</string>
+    <string name="blessing_wish_limit">Up to 30 Chinese characters or 60 letters</string>
+    <string name="blessing_from">Blessings from %1$s</string>
+
+    <string name="words_export">Export words</string>
+    <string name="words_import">Import words</string>
+    <string name="words_local">Local folder</string>
+    <string name="words_drive">Drive</string>
+    <string name="words_file_stem">mini-pinyin-words</string>
+    <string name="words_saved_downloads">Saved to Downloads</string>
+    <string name="words_saved">Saved</string>
+    <string name="words_save_failed">Could not save</string>
+    <string name="words_read_failed">Could not read the file</string>
+    <string name="words_not_file">This is not a word list</string>
+    <string name="words_imported">Imported %1$d</string>
+    <string name="words_drive_missing">Google Drive is not installed</string>
+    <string name="words_drive_sign_in">Sign in to Google Drive first</string>
+    <string name="words_drive_opened">Opened Google Drive</string>
+
+    <string name="grid_clear">Clear</string>
+    <string name="grid_page_up">Up</string>
+    <string name="grid_page_down">Down</string>
+
+    <string name="emoji_back">Back</string>
+    <string name="emoji_tab_frequent">Top</string>
+    <string name="emoji_tab_face">Face</string>
+    <string name="emoji_tab_hand">Hand</string>
+    <string name="emoji_tab_symbol">Sign</string>
+    <string name="emoji_tab_person">Ppl</string>
+    <string name="emoji_tab_food">Food</string>
+    <string name="emoji_tab_nature">Wild</string>
+
+    <string name="key_symbols">Sym</string>
+    <string name="key_space">Space</string>
+    <string name="key_chinese">ZH</string>
+    <string name="key_english">EN</string>
+    <string name="key_back">Back</string>
+    <string name="key_clear">Clear</string>
+    <string name="key_symbols_chinese">CN</string>
+    <string name="key_symbols_english">EN</string>
+
+    <string name="enter_newline">Enter</string>
+    <string name="enter_search">Search</string>
+    <string name="enter_send">Send</string>
+    <string name="enter_go">Go</string>
+    <string name="enter_next">Next</string>
+    <string name="enter_previous">Prev</string>
+    <string name="enter_done">Done</string>
+
+    <string name="festival_new_year">New Year</string>
+    <string name="festival_valentine">Valentine</string>
+    <string name="festival_easter">Easter</string>
+    <string name="festival_independence">Independence</string>
+    <string name="festival_halloween">Halloween</string>
+    <string name="festival_thanksgiving">Thanksgiving</string>
+    <string name="festival_bonfire">Bonfire Night</string>
+    <string name="festival_christmas">Christmas</string>
+    <string name="festival_spring">Spring Festival</string>
+    <string name="festival_lantern">Lantern Festival</string>
+    <string name="festival_dragon_boat">Dragon Boat</string>
+    <string name="festival_qixi">Qixi</string>
+    <string name="festival_mid_autumn">Mid-Autumn</string>
+    <string name="festival_double_ninth">Double Ninth</string>
+    <string name="festival_makha">Makha Bucha</string>
+    <string name="festival_songkran">Songkran</string>
+    <string name="festival_vesak">Vesak</string>
+    <string name="festival_loy_krathong">Loy Krathong</string>
+</resources>

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One strip row on top (toolbar, composing strip or emoji tabs), one fixed-height area below. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/keyboard_background"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/strip_height">
+
+        <com.notee.pinyin.keyboard.ButtonRowView
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.notee.pinyin.keyboard.CandidateStripView
+            android:id="@+id/candidate_strip"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <com.notee.pinyin.keyboard.ButtonRowView
+            android:id="@+id/emoji_tabs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/keys_height">
+
+        <com.notee.pinyin.keyboard.KeyboardView
+            android:id="@+id/keys"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.notee.pinyin.keyboard.CandidateGridView
+            android:id="@+id/candidate_grid"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/keyboard_background"
+            android:visibility="gone" />
+
+        <!-- One scroll for the whole panel, so the word-file rows move with the festivals. -->
+        <ScrollView
+            android:id="@+id/effects_panel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/keyboard_background"
+            android:clickable="true"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:orientation="vertical">
+
+                <com.notee.pinyin.keyboard.ButtonRowView
+                    android:id="@+id/tool_sound"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/tool_row_height" />
+
+                <com.notee.pinyin.keyboard.ButtonRowView
+                    android:id="@+id/tool_festival_test"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/tool_row_height" />
+
+                <com.notee.pinyin.keyboard.ButtonRowView
+                    android:id="@+id/word_actions"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/tool_row_height" />
+
+                <com.notee.pinyin.keyboard.ButtonRowView
+                    android:id="@+id/word_places"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/tool_row_height"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/festival_rows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </ScrollView>
+
+        <com.notee.pinyin.keyboard.ClipboardPanelView
+            android:id="@+id/clipboard_panel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/keyboard_background"
+            android:clickable="true"
+            android:visibility="gone" />
+
+        <ScrollView
+            android:id="@+id/emoji_panel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/keyboard_background"
+            android:visibility="gone">
+
+            <com.notee.pinyin.keyboard.EmojiGridView
+                android:id="@+id/emoji_grid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </ScrollView>
+
+        <com.notee.pinyin.keyboard.FestivalBurstView
+            android:id="@+id/festival_burst"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

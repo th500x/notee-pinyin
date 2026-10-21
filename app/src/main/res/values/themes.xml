@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Platform themes only: the app ships no AndroidX UI library. -->
+    <style name="Theme.NoteePinyin" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.NoteePinyin.Keyboard" parent="android:Theme.DeviceDefault.InputMethod">
+        <item name="android:navigationBarColor">@color/keyboard_background</item>
+    </style>
+</resources>

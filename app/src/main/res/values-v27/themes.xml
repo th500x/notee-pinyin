@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NoteePinyin.Keyboard" parent="android:Theme.DeviceDefault.InputMethod">
+        <item name="android:navigationBarColor">@color/keyboard_background</item>
+        <item name="android:windowLightNavigationBar">@bool/light_system_bars</item>
+    </style>
+</resources>

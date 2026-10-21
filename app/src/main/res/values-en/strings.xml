@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mini Pinyin</string>
+    <string name="subtype_zh_cn">Simplified Chinese</string>
+
+    <string name="setup_title">Mini Pinyin</string>
+    <string name="setup_intro">An offline Pinyin keyboard. The first characters for each syllable never move, so you can type without looking.</string>
+    <string name="setup_step_enable">1. Turn on Mini Pinyin in the system keyboard list</string>
+    <string name="setup_step_switch">2. Switch to Mini Pinyin</string>
+    <string name="setup_enable">Open keyboard settings</string>
+    <string name="setup_switch">Choose keyboard</string>
+    <string name="setup_status_off">Not turned on yet</string>
+    <string name="setup_status_enabled">Turned on, not in use</string>
+    <string name="setup_status_ready">Ready. Mini Pinyin is your current keyboard.</string>
+    <string name="setup_try_hint">Try it here</string>
+    <string name="setup_privacy">Works fully offline. Learned words, emoji counts and the last five clipboard texts stay on this device. You can export the word list yourself.</string>
+    <string name="setup_privacy_link">Privacy policy</string>
+    <string name="setup_source">Source code</string>
+    <string name="setup_license">GPL-3.0. Dictionary: rime-ice (GPL-3.0). Traditional Chinese tables: OpenCC (Apache-2.0). English word frequency: AOSP LatinIME (Apache-2.0). Next-word counts: Tatoeba (CC BY 2.0).</string>
+</resources>

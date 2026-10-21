@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Default is Simplified Chinese. values-en supplies the English chrome. Not Traditional. -->
+    <string name="toolbar_tools">工具</string>
+    <string name="toolbar_simplified">简体</string>
+    <string name="toolbar_traditional">繁体</string>
+    <string name="toolbar_layout_qwerty">26键</string>
+    <string name="toolbar_layout_t9">9键</string>
+    <string name="toolbar_clipboard">剪贴板</string>
+    <string name="clipboard_unavailable">系统版本过低，本功能禁用</string>
+    <string name="toolbar_emoji" translatable="false">Emoji</string>
+
+    <string name="effects_sound">按键音</string>
+    <string name="effects_on">开</string>
+    <string name="effects_off">关</string>
+    <string name="effects_festival_test">节日测试</string>
+    <string name="blessing_sign_hint">请输入名字或者昵称，或者空白跳过</string>
+    <string name="blessing_sign_ok">确定</string>
+    <string name="blessing_sign_limit">署名最多十个汉字或二十个字母</string>
+    <string name="blessing_wish_hint">写一句祝福，或者空白用自带的一句</string>
+    <string name="blessing_wish_limit">祝福语最多三十个汉字或六十个字母</string>
+    <string name="blessing_from">来自%1$s的祝福</string>
+
+    <string name="words_export">词库导出</string>
+    <string name="words_import">词库导入</string>
+    <string name="words_local">本地目录</string>
+    <string name="words_drive">云端硬盘</string>
+    <string name="words_file_stem">极拼音词库</string>
+    <string name="words_saved_downloads">已保存到下载目录</string>
+    <string name="words_saved">已保存</string>
+    <string name="words_save_failed">没有保存成功</string>
+    <string name="words_read_failed">没有读到文件</string>
+    <string name="words_not_file">这不是词库文件</string>
+    <string name="words_imported">已导入 %1$d 条</string>
+    <string name="words_drive_missing">未安装谷歌云端硬盘</string>
+    <string name="words_drive_sign_in">请先登录谷歌云端硬盘</string>
+    <string name="words_drive_opened">已打开云端硬盘</string>
+
+    <string name="grid_clear">清除</string>
+    <string name="grid_page_up">上翻</string>
+    <string name="grid_page_down">下翻</string>
+
+    <string name="emoji_back">返回</string>
+    <string name="emoji_tab_frequent">常用</string>
+    <string name="emoji_tab_face">黄脸</string>
+    <string name="emoji_tab_hand">手势</string>
+    <string name="emoji_tab_symbol">元素</string>
+    <string name="emoji_tab_person">人物</string>
+    <string name="emoji_tab_food">食物</string>
+    <string name="emoji_tab_nature">动植</string>
+
+    <string name="key_shift" translatable="false">⇧</string>
+    <string name="key_delete" translatable="false">⌫</string>
+    <string name="key_symbols">符</string>
+    <string name="key_numbers" translatable="false">123</string>
+    <string name="key_space">空格</string>
+    <string name="key_chinese">中</string>
+    <string name="key_english">英</string>
+    <string name="key_back">返回</string>
+    <string name="key_clear">清除</string>
+    <string name="key_symbols_chinese">中文</string>
+    <string name="key_symbols_english">英文</string>
+    <string name="key_emoji_unset" translatable="false">☺</string>
+
+    <string name="enter_newline">回车</string>
+    <string name="enter_search">搜索</string>
+    <string name="enter_send">发送</string>
+    <string name="enter_go">前往</string>
+    <string name="enter_next">下一项</string>
+    <string name="enter_previous">上一项</string>
+    <string name="enter_done">完成</string>
+
+    <string name="festival_new_year">新年</string>
+    <string name="festival_valentine">情人节</string>
+    <string name="festival_easter">复活节</string>
+    <string name="festival_independence">独立日</string>
+    <string name="festival_halloween">万圣节</string>
+    <string name="festival_thanksgiving">感恩节</string>
+    <string name="festival_bonfire">篝火之夜</string>
+    <string name="festival_christmas">圣诞节</string>
+    <string name="festival_spring">春节</string>
+    <string name="festival_lantern">元宵</string>
+    <string name="festival_dragon_boat">端午</string>
+    <string name="festival_qixi">七夕</string>
+    <string name="festival_mid_autumn">中秋</string>
+    <string name="festival_double_ninth">重阳</string>
+    <string name="festival_makha">万佛节</string>
+    <string name="festival_songkran">宋干节</string>
+    <string name="festival_vesak">佛诞节</string>
+    <string name="festival_loy_krathong">水灯节</string>
+</resources>

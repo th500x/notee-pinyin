@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Toolbar, candidate strip and emoji tabs share one row; the area below never changes height. -->
+    <dimen name="strip_height">52dp</dimen>
+    <dimen name="preedit_height">18dp</dimen>
+    <dimen name="keys_height">220dp</dimen>
+    <!-- Every row in the tools panel: sound, export, import, local, Drive, festivals. -->
+    <dimen name="tool_row_height">44dp</dimen>
+
+    <dimen name="key_gap">3dp</dimen>
+    <dimen name="key_radius">6dp</dimen>
+    <dimen name="grid_side_width">64dp</dimen>
+    <dimen name="grid_cell_min_width">64dp</dimen>
+    <dimen name="grid_row_height">52dp</dimen>
+    <dimen name="strip_item_padding">14dp</dimen>
+    <dimen name="strip_arrow_width">44dp</dimen>
+
+    <dimen name="text_key">22sp</dimen>
+    <dimen name="text_key_word">16sp</dimen>
+    <dimen name="text_key_hint">10sp</dimen>
+    <dimen name="text_candidate">18sp</dimen>
+    <dimen name="text_preedit">13sp</dimen>
+    <dimen name="text_button">15sp</dimen>
+    <dimen name="text_emoji">26sp</dimen>
+</resources>

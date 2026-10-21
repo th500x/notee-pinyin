@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="strip_height">44dp</dimen>
+    <dimen name="preedit_height">15dp</dimen>
+    <dimen name="keys_height">168dp</dimen>
+    <dimen name="grid_row_height">42dp</dimen>
+    <dimen name="text_key">19sp</dimen>
+    <dimen name="text_candidate">16sp</dimen>
+    <dimen name="text_preedit">11sp</dimen>
+    <dimen name="text_emoji">22sp</dimen>
+</resources>

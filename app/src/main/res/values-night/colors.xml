@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="keyboard_background">#FF1E1F22</color>
+    <color name="key_background">#FF3A3B3F</color>
+    <color name="key_pressed">#FF5A5C61</color>
+    <color name="key_function">#FF2C2D31</color>
+    <color name="key_function_pressed">#FF4A4C51</color>
+    <color name="key_active">#FF2E4A70</color>
+    <color name="key_text">#FFFFFFFF</color>
+    <color name="key_hint">#FFA3A6AD</color>
+    <color name="preedit_text">#FF8AB4F8</color>
+    <color name="strip_divider">#FF45474C</color>
+</resources>
