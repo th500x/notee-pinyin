@@ -42,4 +42,21 @@ class UserDictionaryLearningTest {
         assertEquals(0, user.count("ni", "你"))
         assertEquals(0, writes)
     }
+
+    @Test
+    fun forgetDropsOneWordAndKeepsAShorterPrefix() {
+        val user = UserDictionary()
+        user.record("ni", "你")
+        user.record("ni hao", "你好")
+        assertTrue(user.hasLonger("ni"))
+        assertTrue(user.forget("ni hao", "你好"))
+        assertEquals(0, user.count("ni hao", "你好"))
+        assertEquals(1, user.count("ni", "你"))
+        assertFalse(user.hasLonger("ni"))
+        assertTrue(user.hasPrefix("ni"))
+        assertFalse(user.forget("ni hao", "你好"))
+        assertTrue(user.forget("ni", "你"))
+        assertFalse(user.hasPrefix("ni"))
+        assertTrue(user.learnedWords().isEmpty())
+    }
 }

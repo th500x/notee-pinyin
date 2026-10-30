@@ -34,14 +34,18 @@ class Settings(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_SOUND, value).apply()
 
     /**
-     * While on, the tools panel lists every festival and a tap sends the blessing card
-     * even when today is not that festival's own day. Off unless the user turns it on.
+     * While on, every festival is listed and a tap sends the blessing card even when today
+     * is not that festival's own day. The tools panel no longer has a switch for this.
+     * Off unless a previous build stored it on. The behavior stays so that value still works.
      */
     var festivalTest: Boolean
         get() = prefs.getBoolean(KEY_FESTIVAL_TEST, false)
         set(value) = prefs.edit().putBoolean(KEY_FESTIVAL_TEST, value).apply()
 
-    /** The emoji pinned on 9-key slot [slot] (0 or 1), or null. */
+    /**
+     * The emoji pinned on a 9-key slot, or null. Slot 1 is the right column.
+     * Slot 0 was the top-left pin; that key is now 「极」 and does not read this.
+     */
     fun emojiSlot(slot: Int): String? = prefs.getString(emojiSlotKey(slot), null)
 
     fun setEmojiSlot(slot: Int, emoji: String) = prefs.edit().putString(emojiSlotKey(slot), emoji).apply()

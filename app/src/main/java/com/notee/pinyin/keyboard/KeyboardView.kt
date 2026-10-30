@@ -2,7 +2,10 @@ package com.notee.pinyin.keyboard
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -48,6 +51,7 @@ class KeyboardView @JvmOverloads constructor(context: Context, attrs: AttributeS
 
     private val painter = KeyPainter(context)
     private val wordSize = painter.dimension(R.dimen.text_key_word)
+    private val images = HashMap<Int, Bitmap>()
     private var labelSizes = FloatArray(0)
     private val presses = HashMap<Int, Press>()
     private val pending = HashMap<Int, Runnable>()
@@ -59,7 +63,9 @@ class KeyboardView @JvmOverloads constructor(context: Context, attrs: AttributeS
         grid.keys.forEachIndexed { i, key ->
             cellOf(grid, key, cell)
             painter.cap(canvas, cell, painter.capColor(key.style, key in pressed))
-            painter.label(canvas, cell, key.label, labelSizes[i], painter.labelColor(key.style))
+            val bitmap = if (key.image != 0) image(key.image) else null
+            if (bitmap != null) painter.image(canvas, cell, bitmap, wordSize, painter.hintColor)
+            else painter.label(canvas, cell, key.label, labelSizes[i], painter.labelColor(key.style))
             key.hint?.let { painter.hint(canvas, cell, it) }
         }
     }
@@ -137,9 +143,62 @@ class KeyboardView @JvmOverloads constructor(context: Context, attrs: AttributeS
         }
     }
 
+    private fun image(id: Int): Bitmap? {
+        images[id]?.let { return it }
+        val source = BitmapFactory.decodeResource(resources, id) ?: return null
+        val mark = markOf(source)
+        if (mark !== source) source.recycle()
+        images[id] = mark
+        return mark
+    }
+
+    /** The white calligraphy, without the blue plate. Soft edges stay. */
+    private fun markOf(source: Bitmap): Bitmap {
+        val width = source.width
+        val height = source.height
+        val pixels = IntArray(width * height)
+        source.getPixels(pixels, 0, width, 0, 0, width, height)
+        val alpha = IntArray(pixels.size)
+        var minX = width
+        var minY = height
+        var maxX = 0
+        var maxY = 0
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            if (Color.alpha(color) < 16) continue
+            val lum = (Color.red(color) * 3 + Color.green(color) * 6 + Color.blue(color)) / 10
+            val ink = ((lum - PLATE_LUM) * 255 / (255 - PLATE_LUM)).coerceIn(0, 255)
+            if (ink == 0) continue
+            alpha[i] = ink
+            if (ink <= 32) continue
+            val x = i % width
+            val y = i / width
+            if (x < minX) minX = x
+            if (y < minY) minY = y
+            if (x > maxX) maxX = x
+            if (y > maxY) maxY = y
+        }
+        if (maxX < minX || maxY < minY) return source
+        val outWidth = maxX - minX + 1
+        val outHeight = maxY - minY + 1
+        val out = IntArray(outWidth * outHeight)
+        for (y in 0 until outHeight) {
+            val from = (minY + y) * width + minX
+            for (x in 0 until outWidth) {
+                out[y * outWidth + x] = Color.argb(alpha[from + x], 255, 255, 255)
+            }
+        }
+        return Bitmap.createBitmap(out, outWidth, outHeight, Bitmap.Config.ARGB_8888)
+    }
+
     private fun cellOf(grid: KeyGrid, key: Key, out: RectF) {
         val unitX = width / grid.columns
         val unitY = height / grid.rows
         out.set(key.x * unitX, key.y * unitY, (key.x + key.width) * unitX, (key.y + key.height) * unitY)
+    }
+
+    private companion object {
+        /** Luminance of the logo's blue plate. Brighter pixels are the mark. */
+        const val PLATE_LUM = 140
     }
 }

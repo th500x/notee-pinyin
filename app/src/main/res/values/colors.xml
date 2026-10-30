@@ -11,6 +11,9 @@
     <color name="key_hint">#FF7C8088</color>
     <color name="preedit_text">#FF2F6FD0</color>
     <color name="strip_divider">#FFC4C8CF</color>
+    <color name="switch_on">#FFFF3B30</color>
+    <color name="switch_off">#FF8E939C</color>
+    <color name="switch_thumb">#FFFFFFFF</color>
 
     <!-- Delete keeps its green in both sets. -->
     <color name="key_delete">#FF3DA35D</color>

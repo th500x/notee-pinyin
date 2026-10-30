@@ -10,7 +10,7 @@
     <string name="clipboard_unavailable">系统版本过低，本功能禁用</string>
     <string name="toolbar_emoji" translatable="false">Emoji</string>
 
-    <string name="effects_sound">按键音</string>
+    <string name="effects_sound">按键音效</string>
     <string name="effects_on">开</string>
     <string name="effects_off">关</string>
     <string name="effects_festival_test">节日测试</string>
@@ -35,6 +35,7 @@
     <string name="words_drive_missing">未安装谷歌云端硬盘</string>
     <string name="words_drive_sign_in">请先登录谷歌云端硬盘</string>
     <string name="words_drive_opened">已打开云端硬盘</string>
+    <string name="words_forgotten">已从个人词库移除</string>
 
     <string name="grid_clear">清除</string>
     <string name="grid_page_up">上翻</string>

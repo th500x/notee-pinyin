@@ -92,6 +92,18 @@ class T9ComposerTest {
     }
 
     @Test
+    fun aReadingThatLeavesNoSyllableIsNotOffered() {
+        press(T9Keys.digitsOf("xiang"))
+        val choices = composer.preedit.choices.map { it.spelling }
+        assertTrue(choices.contains("xiang"))
+        assertTrue(choices.contains("zhang"))
+        assertFalse(choices.contains("xiao"))
+        assertFalse(choices.contains("xian"))
+        assertFalse(choices.contains("zhao"))
+        assertFalse(choices.contains("zhan"))
+    }
+
+    @Test
     fun choosingTheFirstSyllableKeepsTheRestOpen() {
         press("9474")
         assertTrue(composer.choose(syllables.id("yi")))
@@ -189,6 +201,170 @@ class T9ComposerTest {
         user.record("ni hao", "拟好呀")
         "64246".forEach(t9::press)
         assertTrue("拟好呀" in t9.candidates.texts())
+    }
+
+    @Test
+    fun selectingRangFromARunningPhraseKeepsTheTail() {
+        press(T9Keys.digitsOf("rangtamen"))
+        assertEquals("rang'ta'men", composer.preedit.pinyin)
+        val rang = composer.candidates.items.filterIsInstance<CandidateItem.Word>()
+            .first { it.candidate.text == "让" }
+        assertTrue(rang.candidate.end > 0)
+        assertFalse(rang.candidate.corrected)
+        assertEquals(null, composer.select(rang.candidate))
+        assertEquals("让", composer.preedit.chosen)
+        assertTrue(composer.preedit.pinyin.isNotEmpty())
+        assertTrue(composer.preedit.pinyin != "rang'ta'men")
+        val committed = composer.commitAll()
+        assertTrue(committed, committed.startsWith("让"))
+    }
+
+    /** Every shown word for these key runs must be selectable, and must move the composition. */
+    @Test
+    fun everyShownCandidateCanBeSelected() {
+        val samples = listOf(
+            "rangtamen", "nihao", "women", "xian", "xianguang", "ba", "shuo", "zhongguo",
+            "jintian", "beijing", "shanghai", "womenyiqiqu", "xiang", "zhang",
+            "xiao", "pengyou", "rang", "pang", "chi", "heshui", "wode",
+        )
+        for (spelling in samples) {
+            val keys = T9Keys.digitsOf(spelling)
+            val probe = TestData.composers().t9
+            keys.forEach(probe::press)
+            val items = probe.candidates.items
+            for (index in items.indices) {
+                val shown = items[index]
+                if (shown !is CandidateItem.Word) continue
+                val fresh = TestData.composers().t9
+                keys.forEach(fresh::press)
+                val item = fresh.candidates.items[index]
+                check(item is CandidateItem.Word) { "$spelling #$index disappeared" }
+                val candidate = item.candidate
+                if (!candidate.corrected) {
+                    val letters = candidate.syllables.sumOf { syllables.spelling(it).length }
+                    check(letters == candidate.end) {
+                        "$spelling ${candidate.text} spells $letters keys but ends at ${candidate.end}"
+                    }
+                }
+                val committed = fresh.select(candidate)
+                fresh.preedit
+                fresh.candidates
+                if (committed == null) {
+                    check(fresh.preedit.chosen.endsWith(candidate.text)) {
+                        "$spelling selecting ${candidate.text} left chosen='${fresh.preedit.chosen}'"
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun baPinsBaFirst() {
+        press(T9Keys.digitsOf("ba"))
+        assertEquals("吧", composer.candidates.first?.text)
+    }
+
+    @Test
+    fun minAndNinLeadWithNinUntilAReadingIsChosen() {
+        press(T9Keys.digitsOf("nin"))
+        assertEquals(listOf("您", "民", "敏", "|"), composer.candidates.texts().take(4))
+        val min = composer.preedit.choices.first { it.spelling == "min" }
+        assertTrue(composer.choose(min.syllable))
+        assertEquals(listOf("民", "敏"), composer.candidates.texts().take(2))
+    }
+
+    @Test
+    fun zuLinLeadsWithRent() {
+        press(T9Keys.digitsOf("zulin"))
+        val texts = composer.candidates.texts()
+        assertEquals("租金", texts.first())
+        assertTrue(texts.indexOf("租金") < texts.indexOf("租赁"))
+    }
+
+    @Test
+    fun keAndLeLeadWithLeUntilAReadingIsChosen() {
+        press(T9Keys.digitsOf("ke"))
+        assertEquals(listOf("了", "可", "刻", "克", "乐", "勒", "|"), composer.candidates.texts().take(7))
+        val ke = composer.preedit.choices.first { it.spelling == "ke" }
+        assertTrue(composer.choose(ke.syllable))
+        assertEquals(listOf("可", "刻", "克"), composer.candidates.texts().take(3))
+    }
+
+    @Test
+    fun choosingTianThenKongDropsTheOtherReadings() {
+        press(T9Keys.digitsOf("tiankong"))
+        val tian = composer.preedit.choices.first { it.spelling == "tian" }
+        assertTrue(composer.choose(tian.syllable))
+        val next = composer.preedit.choices.map { it.spelling }
+        assertTrue(next.size > 1)
+        assertTrue(next.contains("kong"))
+        assertTrue(composer.choose(syllables.id("kong")))
+        assertEquals("tian'kong", composer.preedit.pinyin)
+        val words = composer.candidates.items.mapNotNull { (it as? CandidateItem.Word)?.candidate }
+        assertTrue(words.any { !it.corrected && it.syllables.map(syllables::spelling) == listOf("tian", "kong") })
+        assertTrue(words.none { word ->
+            if (word.corrected) {
+                false
+            } else {
+                val spells = word.syllables.map(syllables::spelling)
+                spells.first() != "tian" || (spells.sumOf { it.length } == 8 && spells != listOf("tian", "kong"))
+            }
+        })
+    }
+
+    @Test
+    fun aChosenReadingMovesToTheFrontNextTime() {
+        val user = UserDictionary()
+        val t9 = TestData.composers(user).t9
+        val keys = T9Keys.digitsOf("xian")
+        keys.forEach(t9::press)
+        val choices = t9.preedit.choices
+        assertTrue(choices.size > 1)
+        val pick = choices.firstOrNull { it.spelling == "xian" && it != choices.first() } ?: choices.last()
+        assertTrue(t9.choose(pick.syllable))
+        assertEquals(1, user.syllableCount(T9Keys.digitsOf(pick.spelling), pick.spelling))
+        t9.clear()
+        keys.forEach(t9::press)
+        assertEquals(pick.spelling, t9.preedit.choices.first().spelling)
+    }
+
+    @Test
+    fun aPrivateFieldDoesNotRememberTheReading() {
+        val user = UserDictionary()
+        user.learning = false
+        var recorded = 0
+        user.onSyllableRecorded = { _, _ -> recorded++ }
+        val t9 = TestData.composers(user).t9
+        val keys = T9Keys.digitsOf("xian")
+        keys.forEach(t9::press)
+        val before = t9.preedit.choices.map { it.spelling }
+        assertTrue(t9.choose(t9.preedit.choices.last().syllable))
+        t9.clear()
+        keys.forEach(t9::press)
+        assertEquals(before, t9.preedit.choices.map { it.spelling })
+        assertEquals(0, recorded)
+    }
+
+    @Test
+    fun everySyllableCandidateAgreesWithItsKeys() {
+        for (id in 0 until syllables.size) {
+            val spelling = syllables.spelling(id)
+            val t9 = TestData.composers().t9
+            T9Keys.digitsOf(spelling).forEach(t9::press)
+            for (item in t9.candidates.items) {
+                if (item !is CandidateItem.Word) continue
+                val candidate = item.candidate
+                if (candidate.corrected) continue
+                val letters = candidate.syllables.sumOf { syllables.spelling(it).length }
+                check(letters == candidate.end) {
+                    "$spelling ${candidate.text} spells $letters keys but ends at ${candidate.end}"
+                }
+            }
+            val first = t9.candidates.first ?: continue
+            t9.select(first)
+            t9.preedit
+            t9.candidates
+        }
     }
 
     @Test

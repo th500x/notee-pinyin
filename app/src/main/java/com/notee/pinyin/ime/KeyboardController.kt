@@ -33,6 +33,7 @@ import com.notee.pinyin.data.WordPlaces
 import com.notee.pinyin.data.WordTransfer
 import com.notee.pinyin.emoji.EmojiCatalog
 import com.notee.pinyin.emoji.EmojiTab
+import kotlin.random.Random
 import com.notee.pinyin.engine.UserDictionary
 import com.notee.pinyin.engine.WordFile
 import com.notee.pinyin.engine.CandidateItem
@@ -40,6 +41,8 @@ import com.notee.pinyin.engine.CandidateList
 import com.notee.pinyin.engine.ScriptConverter
 import com.notee.pinyin.input.Composer
 import com.notee.pinyin.input.Composers
+import com.notee.pinyin.input.EmailDomains
+import com.notee.pinyin.input.EnglishSpacing
 import com.notee.pinyin.input.Preedit
 import com.notee.pinyin.keyboard.ButtonRowView
 import com.notee.pinyin.keyboard.CandidateGridView
@@ -81,6 +84,9 @@ class KeyboardController(
     private val user: UserDictionary,
     private val storage: Storage,
 ) : KeyboardView.Listener, CandidateStripView.Listener, CandidateGridView.Listener {
+
+    /** Reads the system clipboard. Set by the service; only the clipboard button runs it. */
+    var refreshClipboard: () -> Unit = {}
 
     private enum class ToolbarButton { EFFECTS, SCRIPT, LAYOUT, CLIPBOARD, EMOJI }
 
@@ -135,15 +141,21 @@ class KeyboardController(
     /** Our own last commit; copying exactly that is not kept in the history (docs/02-0 §4). */
     private var lastCommitted: String? = null
 
-    /** Remainders that can follow the text just committed, simplified (docs/01-0 §6). */
+    /** Unused next-word row. A commit leaves this empty so the toolbar stays (docs/01-0 §6). */
     private var association: List<String> = emptyList()
 
-    /** Cursor after that commit. A tap elsewhere dismisses [association]. */
+    /** Domains for an email field, after a single `@` at the cursor (docs/01-0 §6). */
+    private var emailOffers: List<EmailDomains.Offer> = emptyList()
+
+    /** Cursor after a commit. A tap elsewhere dismisses a leftover association row. */
     private var associationCursor = -1
     private var acceptNextSelection = false
 
     /** 0 is 常用, then [EmojiTab] in order. */
     private var emojiTab = 0
+
+    /** The last face the 「极」 key sent, so the next tap picks a different one. */
+    private var lastLogoFace: String? = null
 
     /** The 9-key slot waiting for an emoji, or null when emoji are sent. */
     private var emojiTarget: Int? = null
@@ -211,6 +223,7 @@ class KeyboardController(
     private var labelSource: CandidateList? = null
     private var labelScript: Script? = null
     private var labels: List<String?> = emptyList()
+    private var learnedMarks: List<Boolean> = emptyList()
 
     init {
         feedback.sound = settings.keySound
@@ -218,8 +231,12 @@ class KeyboardController(
 
     private val language: Language get() = if (password) Language.ENGLISH else settings.language
 
-    /** English stays on the 26-key page. Password uses that page too, and still commits each letter. */
-    private val layout: Layout get() = if (language == Language.ENGLISH) Layout.QWERTY else settings.layout
+    /** The field declared an email address. Letters commit directly; the saved language and layout stay. */
+    private val emailField: Boolean get() = editor.isEmail && !password
+
+    /** English and an email field stay on the 26-key page. Password uses that page too. */
+    private val layout: Layout
+        get() = if (language == Language.ENGLISH || emailField) Layout.QWERTY else settings.layout
 
     /** Password is checked before language: it is English, and it does not compose a word. */
     private val typingEnglish: Boolean get() = !password && language == Language.ENGLISH
@@ -234,12 +251,12 @@ class KeyboardController(
 
     private val composer: Composer get() = if (layout == Layout.T9) composers.t9 else composers.qwerty
 
-    /** The toolbar under the header keeps clear of its preedit line and its arrow. */
+    /** The toolbar under the header keeps clear of the preedit line. The arrow column is reserved by the row itself. */
     private val headerTop: Int get() = context.resources.getDimensionPixelSize(R.dimen.preedit_height)
-    private val headerEnd: Int get() = context.resources.getDimensionPixelSize(R.dimen.strip_arrow_width)
 
     /** Open pinyin belongs to one layout's keys, so 布局 waits until it is committed or cleared. */
-    private val canSwitchLayout: Boolean get() = language == Language.CHINESE && !composer.isComposing
+    private val canSwitchLayout: Boolean
+        get() = language == Language.CHINESE && !emailField && !composer.isComposing
 
     /** Android 13 marks sensitive clips. Older releases keep the button, and it explains itself. */
     private val clipsSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -276,11 +293,18 @@ class KeyboardController(
         views.keys.listener = this
         views.strip.listener = this
         views.grid.listener = this
+        views.toolbar.showsEnd = true
+        views.toolbar.onEnd = { hideKeyboard() }
         views.toolbar.onTap = { onToolbar(ToolbarButton.entries[it]) }
         views.toolSound.onTap = ::onSound
         views.toolFestivalTest.onTap = ::onFestivalTest
         views.wordActions.onTap = ::onWordAction
         views.wordPlaces.onTap = ::onWordPlace
+        val toolAnchor = text(R.string.effects_sound)
+        views.toolSound.alignToLabel = toolAnchor
+        views.toolFestivalTest.alignToLabel = toolAnchor
+        views.wordActions.alignToLabel = toolAnchor
+        views.wordPlaces.alignToLabel = toolAnchor
         views.emojiTabs.onTap = ::onEmojiTab
         views.emojiTabs.onPress = { if (it == EMOJI_DELETE) feedback.keyDown(KeyAction.Delete) }
         views.emojiGrid.onEmoji = ::onEmoji
@@ -310,9 +334,10 @@ class KeyboardController(
             shifted = false
             arithmeticArmed = false
             emojiTarget = null
-            clearAssociation()
             views?.burst?.stop()
         }
+        clearAssociation()
+        if (emailField) clearCompositions()
         render()
         syncNavigationPadding()
     }
@@ -342,9 +367,19 @@ class KeyboardController(
      * [newStart] and [newEnd] are the editor selection after the change. The update caused by our
      * own commit is kept; a cursor that then moves somewhere else dismisses the association row.
      * An update that reports the same range is ignored while that commit is still outstanding,
-     * because some editors send it before the cursor has actually moved.
+     * because some editors send it before the cursor has actually moved. A caret that returns to
+     * the start is a send: the field was cleared, so the row goes even if that update arrives
+     * before we have accepted our own commit.
      */
     fun onSelectionChanged(oldStart: Int, oldEnd: Int, newStart: Int, newEnd: Int) {
+        val returnedToStart = newStart == 0 && newEnd == 0 && (oldStart != 0 || oldEnd != 0)
+        if (returnedToStart && association.isNotEmpty()) {
+            acceptNextSelection = false
+            clearAssociation()
+            if (signing == null && composers.english.isComposing) composers.english.clear()
+            render()
+            return
+        }
         if (acceptNextSelection) {
             val unchanged = newStart == oldStart && newEnd == oldEnd
             if (unchanged) return
@@ -430,12 +465,13 @@ class KeyboardController(
             KeyAction.Numbers -> page = Page.NUMBERS
             KeyAction.Symbols -> {
                 pageBeforeSymbols = page
-                settings.symbolLanguage = language
+                settings.symbolLanguage = if (page == Page.NUMBERS) Language.ENGLISH else language
                 page = Page.SYMBOLS
             }
             KeyAction.Back -> page = if (page == Page.SYMBOLS) pageBeforeSymbols else Page.LETTERS
             is KeyAction.SymbolLanguage -> settings.symbolLanguage = action.language
             is KeyAction.EmojiSlot -> emojiSlot(action.slot, longPress)
+            KeyAction.LogoFace -> typeLogoFace()
         }
         render()
     }
@@ -443,7 +479,7 @@ class KeyboardController(
     private fun typeLetter(letter: Char) {
         val typed = if (shifted) letter.uppercaseChar() else letter
         when {
-            password -> commitText(typed.toString())
+            password || emailField -> commitText(typed.toString())
             language == Language.CHINESE && shifted -> commitText(typed.toString())
             language == Language.CHINESE -> {
                 arithmeticArmed = false
@@ -536,6 +572,14 @@ class KeyboardController(
         if (pinned != null && !longPress) sendEmoji(pinned) else openEmoji(target = slot)
     }
 
+    /** A round face from 黄脸. This tap is not counted, so 常用 stays as it was. */
+    private fun typeLogoFace() {
+        if (password) return
+        val face = EmojiCatalog.pickLogoFace(emojiCatalog.logoFaces(), lastLogoFace, Random.nextInt()) ?: return
+        lastLogoFace = face
+        commitText(face)
+    }
+
     // ---- committing ----
 
     /** Text that bypasses composition. An open composition goes out first, without leaving a next-word row. */
@@ -547,12 +591,35 @@ class KeyboardController(
 
     /** While a card sheet is open, text stays on the active line. Otherwise it goes to the editor. */
     private fun place(text: String) {
+        val join = joinsEnglishMark(text)
         if (signing != null) {
+            if (join) {
+                val (next, at) = Signature.deleteBefore(cardText(), cursor)
+                if (Signature.fits(next, text, cardLimit())) {
+                    writeCard(next)
+                    cursor = at
+                }
+            }
             insertCard(text)
             return
         }
-        editor.commit(text)
+        if (join) editor.commitAfterSpace(text) else editor.commit(text)
         noteCommit(text)
+    }
+
+    /** English sentence marks replace the one space a word just left behind (docs/01-0 §6). */
+    private fun joinsEnglishMark(text: String): Boolean {
+        if (!typingEnglish) return false
+        return EnglishSpacing.dropSpaceBefore(textBeforeCaret(2), text)
+    }
+
+    private fun textBeforeCaret(length: Int): CharSequence? {
+        if (signing != null) {
+            val line = cardText()
+            val end = cursor.coerceIn(0, line.length)
+            return line.substring((end - length).coerceAtLeast(0), end)
+        }
+        return editor.textBeforeCursor(length)
     }
 
     private fun finishComposition() {
@@ -562,17 +629,10 @@ class KeyboardController(
         }
     }
 
-    /** Chosen words, in the script the toolbar shows. */
+    /** Chosen words, in the script the toolbar shows. Committing does not open a next-word row. */
     private fun commitPinyin(text: String) {
-        val shown = toScript(text)
-        if (signing != null) {
-            clearAssociation()
-            place(shown)
-            return
-        }
-        armAssociation(text)
-        editor.commit(shown)
-        noteCommit(shown)
+        clearAssociation()
+        place(toScript(text))
     }
 
     private fun commitRaw() {
@@ -584,15 +644,45 @@ class KeyboardController(
 
     /** The letters are already in the editor. The user's own space does not offer a next word. */
     private fun commitEnglishSpace() {
+        val typed = composers.english.raw()
+        val spelled = composers.english.placeSpelling()
         composers.english.clear()
         clearAssociation()
+        if (spelled != null && replaceEchoed(typed, "$spelled ")) return
         place(" ")
     }
 
-    /** Stop tracking the word. The letters stay where they were echoed. */
+    /** Stop tracking the word. A finished place name typed in lowercase takes its capital. */
     private fun endEnglishWord() {
+        val typed = composers.english.raw()
+        val spelled = composers.english.placeSpelling()
         composers.english.clear()
         clearAssociation()
+        if (spelled != null) replaceEchoed(typed, spelled)
+    }
+
+    /**
+     * Writes [replacement] over the letters just echoed. False when those letters are not
+     * immediately before the cursor, or when a blessing card has no room.
+     */
+    private fun replaceEchoed(typed: String, replacement: String): Boolean {
+        if (typed.isEmpty() || typed == replacement) return false
+        acceptNextSelection = true
+        if (signing != null) {
+            val line = cardText()
+            val end = cursor.coerceIn(0, line.length)
+            val start = end - typed.length
+            if (start < 0 || line.substring(start, end) != typed) return false
+            val next = line.substring(0, start) + replacement + line.substring(end)
+            if (Signature.units(next) > cardLimit()) return false
+            limitNotice = null
+            writeCard(next)
+            cursor = start + replacement.length
+            return true
+        }
+        if (!editor.replaceBeforeCursor(typed, replacement)) return false
+        noteCommit(replacement)
+        return true
     }
 
     /** 清除 drops the word being typed, including the letters already echoed into the editor. */
@@ -605,28 +695,6 @@ class KeyboardController(
                 editor.deleteBackward()
             }
         }
-    }
-
-    private fun armEnglishNext(word: String) {
-        val items = if (password) emptyList() else composers.english.following(word)
-        if (items.isEmpty()) {
-            clearAssociation()
-            return
-        }
-        association = items
-        acceptNextSelection = true
-    }
-
-    /** [simplified] is the text just committed, before traditional conversion. */
-    private fun armAssociation(simplified: String) {
-        val stem = com.notee.pinyin.engine.Associations.stemOf(simplified)
-        val items = if (stem == null || password) emptyList() else composers.associations.suggest(stem)
-        if (items.isEmpty()) {
-            clearAssociation()
-            return
-        }
-        association = items
-        acceptNextSelection = true
     }
 
     private fun clearAssociation() {
@@ -658,6 +726,7 @@ class KeyboardController(
         when {
             typingEnglish && composers.english.isComposing -> pickEnglish(index)
             composer.isComposing -> pick(index)
+            emailOffers.isNotEmpty() -> pickEmail(index)
             association.isNotEmpty() -> pickAssociation(index)
             else -> answer()?.let {
                 if (signing == null) {
@@ -670,7 +739,7 @@ class KeyboardController(
     }
 
     override fun onSyllableChoice(index: Int) {
-        composers.t9.preedit.choices.getOrNull(index)?.let { composers.t9.choose(it.syllable) }
+        composers.t9.preedit.choices.getOrNull(index)?.let { choseSyllable(it.syllable) }
         render()
     }
 
@@ -680,16 +749,34 @@ class KeyboardController(
         if (panel == Panel.CANDIDATES) {
             panel = Panel.KEYS
         } else {
-            views.grid.show(choiceLabels())
+            showWordGrid()
             panel = Panel.CANDIDATES
         }
         render()
     }
 
+    override fun onToggleSyllables() {
+        val views = views ?: return
+        if (panel == Panel.SYLLABLES) {
+            panel = Panel.KEYS
+        } else {
+            views.grid.show(composers.t9.preedit.choices.map { it.spelling })
+            panel = Panel.SYLLABLES
+        }
+        render()
+    }
+
+    override fun onEmoji() {
+        openEmoji(target = null)
+        render()
+    }
+
     override fun onGridCandidate(index: Int) {
         when {
+            panel == Panel.SYLLABLES -> pickSyllable(index)
             typingEnglish && composers.english.isComposing -> pickEnglish(index)
             composer.isComposing -> pick(index)
+            emailOffers.isNotEmpty() -> pickEmail(index)
             else -> pickAssociation(index)
         }
         render()
@@ -705,6 +792,12 @@ class KeyboardController(
         render()
     }
 
+    private fun pickEmail(index: Int) {
+        val offer = emailOffers.getOrNull(index) ?: return
+        place(offer.missing)
+        if (panel == Panel.CANDIDATES) panel = Panel.KEYS
+    }
+
     private fun pickAssociation(index: Int) {
         val suffix = association.getOrNull(index) ?: return
         if (signing != null) {
@@ -713,41 +806,62 @@ class KeyboardController(
             if (panel == Panel.CANDIDATES) panel = Panel.KEYS
             return
         }
+        clearAssociation()
         if (typingEnglish) {
             val before = editor.textBeforeCursor(1)
             val lead = if (before != null && before.isNotEmpty() && !before.last().isWhitespace()) " " else ""
-            val shown = lead + suffix
-            armEnglishNext(suffix)
-            editor.commit(shown)
-            noteCommit(shown)
+            place(lead + suffix)
         } else {
-            val shown = toScript(suffix)
-            armAssociation(suffix)
-            editor.commit(shown)
-            noteCommit(shown)
+            place(toScript(suffix))
         }
         if (panel == Panel.CANDIDATES) panel = Panel.KEYS
     }
 
     private fun pickEnglish(index: Int) {
-        val word = composers.english.completion(index) ?: return
-        val rest = composers.english.suffix(index) ?: return
+        val selection = composers.english.selection(index) ?: return
+        val typed = composers.english.raw()
+        val rest = selection.word.substring(typed.length)
         if (signing != null && !acceptCard("$rest ")) return
         composers.english.clear()
-        if (signing != null) {
-            clearAssociation()
-            place("$rest ")
-        } else {
-            armEnglishNext(word)
-            val text = "$rest "
-            editor.commit(text)
-            noteCommit(text)
+        clearAssociation()
+        val wrote = selection.replace && replaceEchoed(typed, "${selection.word} ")
+        if (!wrote) {
+            if (signing != null) place("$rest ") else {
+                acceptNextSelection = true
+                editor.commit("$rest ")
+                noteCommit("$rest ")
+            }
         }
         if (panel == Panel.CANDIDATES) panel = Panel.KEYS
     }
 
+    /**
+     * Fixes the next reading. The open grid keeps the words it was filled with, so a reading
+     * chosen afterwards refills those cells. The strip already does this on every redraw
+     * (docs/01-1 §2).
+     */
+    private fun choseSyllable(syllable: Int): Boolean {
+        if (!composers.t9.choose(syllable)) return false
+        if (panel == Panel.CANDIDATES || panel == Panel.SYLLABLES) {
+            showWordGrid()
+            panel = Panel.CANDIDATES
+        }
+        return true
+    }
+
+    private fun pickSyllable(index: Int) {
+        val choice = composers.t9.preedit.choices.getOrNull(index)
+        if (choice == null || !choseSyllable(choice.syllable)) {
+            views?.grid?.show(composers.t9.preedit.choices.map { it.spelling })
+        }
+    }
+
     private fun pick(index: Int) {
-        val word = composer.candidates.items.getOrNull(index) as? CandidateItem.Word ?: return
+        val word = composer.candidates.items.getOrNull(index) as? CandidateItem.Word
+        if (word == null) {
+            showWordGrid()
+            return
+        }
         if (signing != null && !acceptCard(toScript(word.candidate.text))) return
         composer.select(word.candidate)?.let(::commitPinyin)
         if (panel == Panel.CANDIDATES) panel = Panel.KEYS
@@ -768,10 +882,34 @@ class KeyboardController(
         val current = settings.script
         if (list !== labelSource || current != labelScript) {
             labels = list.items.map { (it as? CandidateItem.Word)?.let { word -> toScript(word.candidate.text) } }
+            learnedMarks = list.items.map { item ->
+                val word = (item as? CandidateItem.Word)?.candidate ?: return@map false
+                user.count(composers.syllables.code(word.syllables), word.text) > 0
+            }
             labelSource = list
             labelScript = current
         }
         return labels
+    }
+
+    /** Blue chips belong to pinyin candidates the user has stored. English and mail stay plain. */
+    private fun wordMarks(): List<Boolean> =
+        if (typingEnglish || !composer.isComposing) emptyList() else learnedMarks
+
+    private fun showWordGrid(resetPage: Boolean = true) {
+        views?.grid?.show(choiceLabels(), wordMarks(), resetPage)
+    }
+
+    override fun onForgetCandidate(index: Int) {
+        if (typingEnglish || !composer.isComposing) return
+        val word = composer.candidates.items.getOrNull(index) as? CandidateItem.Word ?: return
+        val text = word.candidate.text
+        val code = composers.syllables.code(word.candidate.syllables)
+        if (!user.forget(code, text)) return
+        storage.write { deleteUserWord(code, text) }
+        toast(R.string.words_forgotten)
+        if (panel == Panel.CANDIDATES) showWordGrid(resetPage = false)
+        render()
     }
 
     // ---- toolbar and panels ----
@@ -786,7 +924,7 @@ class KeyboardController(
             }
             ToolbarButton.SCRIPT -> {
                 settings.script = if (settings.script == Script.SIMPLIFIED) Script.TRADITIONAL else Script.SIMPLIFIED
-                if (panel == Panel.CANDIDATES) views?.grid?.show(choiceLabels())
+                if (panel == Panel.CANDIDATES) showWordGrid()
             }
             ToolbarButton.LAYOUT -> if (canSwitchLayout) {
                 settings.layout = if (settings.layout == Layout.QWERTY) Layout.T9 else Layout.QWERTY
@@ -797,6 +935,7 @@ class KeyboardController(
                 !learn -> Unit
                 panel == Panel.CLIPBOARD -> panel = Panel.KEYS
                 else -> {
+                    refreshClipboard()
                     views?.clipboard?.show(clips.items)
                     panel = Panel.CLIPBOARD
                 }
@@ -838,8 +977,10 @@ class KeyboardController(
         }
     }
 
+    private fun exportText(): String = WordFile.encode(user.learnedWords(), user.learnedSyllables())
+
     private fun exportLocal() {
-        val text = WordFile.encode(user.learnedWords())
+        val text = exportText()
         val name = WordPlaces.fileName(text(R.string.words_file_stem))
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val saved = WordPlaces.saveToDownloads(context, name, text)
@@ -854,7 +995,7 @@ class KeyboardController(
             toast(R.string.words_drive_missing)
             return
         }
-        val send = WordPlaces.driveSend(context, WordFile.encode(user.learnedWords()), WordPlaces.fileName(text(R.string.words_file_stem)))
+        val send = WordPlaces.driveSend(context, exportText(), WordPlaces.fileName(text(R.string.words_file_stem)))
         if (send == null) {
             toast(R.string.words_drive_sign_in)
             return
@@ -886,17 +1027,20 @@ class KeyboardController(
             toast(R.string.words_read_failed)
             return
         }
-        val words = WordFile.decode(text)
-        if (words == null) {
+        val file = WordFile.decode(text)
+        if (file == null) {
             toast(R.string.words_not_file)
             return
         }
-        for (word in words) user.raiseTo(word.code, word.text, word.count)
-        val rows = words
+        for (word in file.words) user.raiseTo(word.code, word.text, word.count)
+        for (row in file.syllables) user.raiseSyllable(row.digits, row.spelling, row.count)
+        val words = file.words
+        val syllables = file.syllables
         storage.write {
-            for (word in rows) raiseUserWord(word.code, word.text, word.count)
+            for (word in words) raiseUserWord(word.code, word.text, word.count)
+            for (row in syllables) raiseSyllablePick(row.digits, row.spelling, row.count)
         }
-        Toast.makeText(context, context.getString(R.string.words_imported, words.size), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.words_imported, words.size + syllables.size), Toast.LENGTH_SHORT).show()
     }
 
     fun notice(message: Int) = toast(message)
@@ -912,9 +1056,17 @@ class KeyboardController(
     }
 
     private fun openEmoji(target: Int?) {
+        // Letters already in the editor must stop being one English word, or the next letter
+        // would continue it on the far side of the emoji.
+        if (typingEnglish && composers.english.isComposing) endEnglishWord()
         emojiTarget = target
         panel = Panel.EMOJI
         showEmojiTab(0)
+    }
+
+    /** Same as system back while the keys are showing: the window hides, and finishInput clears composition. */
+    private fun hideKeyboard() {
+        (context as InputMethodService).requestHideSelf(0)
     }
 
     /** The tab row: 返回, 常用, each [EmojiTab], then ⌫ at [EMOJI_DELETE]. */
@@ -962,18 +1114,24 @@ class KeyboardController(
             settings.festivalTest -> Festival.entries
             else -> Festivals.activeOn(festivalDay)
         }
-        if (panel == Panel.CANDIDATES && !showingComposition && association.isEmpty()) panel = Panel.KEYS
+        refreshEmailOffers()
+        if ((panel == Panel.CANDIDATES || panel == Panel.SYLLABLES) &&
+            !showingComposition && association.isEmpty() && emailOffers.isEmpty()
+        ) {
+            panel = Panel.KEYS
+        }
         if (password && panel != Panel.KEYS) panel = Panel.KEYS
         if (panel != Panel.EFFECTS) wordSide = null
         renderStrip(views)
         views.keys.grid = currentKeyGrid()
         views.keys.visibility = visibleIf(panel == Panel.KEYS)
-        views.grid.visibility = visibleIf(panel == Panel.CANDIDATES)
+        views.grid.visibility = visibleIf(panel == Panel.CANDIDATES || panel == Panel.SYLLABLES)
         views.effectsPanel.visibility = visibleIf(panel == Panel.EFFECTS)
         views.clipboard.visibility = visibleIf(panel == Panel.CLIPBOARD)
         views.emojiPanel.visibility = visibleIf(panel == Panel.EMOJI)
         if (panel == Panel.EFFECTS) {
             views.toolSound.buttons = soundButtons()
+            views.toolFestivalTest.visibility = View.GONE
             views.toolFestivalTest.buttons = festivalTestButtons()
             views.wordActions.buttons = wordActionButtons()
             views.wordPlaces.visibility = visibleIf(wordSide != null)
@@ -1009,6 +1167,7 @@ class KeyboardController(
         activeFestivals.forEachIndexed { index, festival ->
             val card = cardRows[index] && sample != null
             val row = ButtonRowView(context)
+            row.alignToLabel = text(R.string.effects_sound)
             row.buttons = listOf(
                 ButtonRowView.Button(
                     festivalName(festival),
@@ -1338,30 +1497,43 @@ class KeyboardController(
      */
     private fun renderStrip(views: Views) {
         val composing = showingComposition
-        val associating = !composing && association.isNotEmpty()
+        val emailOnStrip = !composing && emailOffers.isNotEmpty() &&
+            (panel == Panel.KEYS || panel == Panel.CANDIDATES)
+        val associating = !composing && (association.isNotEmpty() || emailOnStrip)
         val overKeys = panel == Panel.KEYS
         val answer = if (overKeys && !composing && !associating) answer() else null
         val choices = overKeys && (composing || answer != null || associating)
         val header = (composing || associating) && !overKeys && panel != Panel.EMOJI
         val toolbar = !password && panel != Panel.EMOJI && !choices
+        val syllablesOpen = panel == Panel.SYLLABLES
+        val englishRow = typingEnglish && overKeys && (composing || associating) && !emailOnStrip
         views.emojiTabs.visibility = visibleIf(panel == Panel.EMOJI)
         views.strip.visibility = visibleIf(choices || header)
         views.toolbar.visibility = visibleIf(toolbar)
         when {
             panel == Panel.EMOJI -> views.emojiTabs.buttons = emojiTabButtons()
             answer != null -> views.strip.showAnswer(answer.shown)
-            associating && overKeys -> views.strip.showCandidates(null, associationLabels())
+            associating && overKeys -> views.strip.showCandidates(
+                null,
+                if (emailOnStrip) emailOffers.map { it.label } else associationLabels(),
+                emoji = englishRow,
+            )
             composing && overKeys -> views.strip.showCandidates(
                 if (typingEnglish) null else currentPreedit(),
                 candidateLabels(),
+                syllablesExpanded = syllablesOpen,
+                emoji = englishRow,
+                learned = wordMarks(),
             )
             header -> views.strip.showHeader(
                 if (composing && !typingEnglish) currentPreedit() else Preedit.EMPTY,
-                expanded = panel == Panel.CANDIDATES,
+                wordsExpanded = panel == Panel.CANDIDATES,
+                syllablesExpanded = syllablesOpen,
             )
         }
         if (toolbar) {
-            if (header) views.toolbar.setPadding(0, headerTop, headerEnd, 0) else views.toolbar.setPadding(0, 0, 0, 0)
+            // The toolbar already reserves the arrow column, so a second right inset would shift `|`.
+            if (header) views.toolbar.setPadding(0, headerTop, 0, 0) else views.toolbar.setPadding(0, 0, 0, 0)
             views.toolbar.buttons = toolbarButtons()
         }
     }
@@ -1380,6 +1552,7 @@ class KeyboardController(
             password = password,
             emojiSlots = List(Settings.EMOJI_SLOTS, settings::emojiSlot),
             symbolLanguage = settings.symbolLanguage,
+            email = emailField,
         )
         val key = PageKey(layout, page, caps)
         if (key != pageKey || keyGrid == null) {
@@ -1426,21 +1599,13 @@ class KeyboardController(
         }
     }
 
-    private fun festivalTestButtons(): List<ButtonRowView.Button> = listOf(
-        toolButton(
-            text(R.string.effects_festival_test),
-            settings.festivalTest,
-            detail = text(if (settings.festivalTest) R.string.effects_on else R.string.effects_off),
-        ),
+    private fun soundButtons(): List<ButtonRowView.Button> = listOf(
+        switchButton(text(R.string.effects_sound), settings.keySound),
         ButtonRowView.Button("", blank = true, enabled = false),
     )
 
-    private fun soundButtons(): List<ButtonRowView.Button> = listOf(
-        toolButton(
-            text(R.string.effects_sound),
-            settings.keySound,
-            detail = text(if (settings.keySound) R.string.effects_on else R.string.effects_off),
-        ),
+    private fun festivalTestButtons(): List<ButtonRowView.Button> = listOf(
+        switchButton(text(R.string.effects_festival_test), settings.festivalTest),
         ButtonRowView.Button("", blank = true, enabled = false),
     )
 
@@ -1455,15 +1620,36 @@ class KeyboardController(
     )
 
     /** A resting tool key uses the function cap. An open one uses the active blue. */
-    private fun toolButton(label: String, selected: Boolean, detail: String? = null) = ButtonRowView.Button(
+    private fun toolButton(label: String, selected: Boolean) = ButtonRowView.Button(
         label,
         selected = selected,
-        detail = detail,
         background = if (selected) null else context.getColor(R.color.key_function),
     )
 
-    /** Candidates while composing, association remainders otherwise. English is not run through the script table. */
-    private fun choiceLabels(): List<String?> = if (inputComposing) candidateLabels() else associationLabels()
+    /** Label plus the red/gray slider. The cap stays the function color; the slider shows on or off. */
+    private fun switchButton(label: String, on: Boolean) = ButtonRowView.Button(
+        label,
+        switchOn = on,
+        background = context.getColor(R.color.key_function),
+    )
+
+    /** Candidates while composing, mail domains after `@`, association remainders otherwise. */
+    private fun choiceLabels(): List<String?> = when {
+        inputComposing -> candidateLabels()
+        emailOffers.isNotEmpty() -> emailOffers.map { it.label }
+        else -> associationLabels()
+    }
+
+    /** The token at the cursor, only while this field declared itself an email address. */
+    private fun refreshEmailOffers() {
+        if (!emailField || signing != null) {
+            emailOffers = emptyList()
+            return
+        }
+        val before = editor.textBeforeCursor(EMAIL_LOOK)?.toString().orEmpty()
+        val after = editor.textAfterCursor(1)?.toString().orEmpty()
+        emailOffers = EmailDomains.offers(before, after)
+    }
 
     private fun associationLabels(): List<String> = if (typingEnglish) association else association.map(::toScript)
 
@@ -1493,6 +1679,9 @@ class KeyboardController(
     private companion object {
         /** Index of ⌫ in the emoji tab row, after 返回, 常用 and the tabs. */
         val EMOJI_DELETE = EmojiTab.entries.size + 2
+
+        /** Local part, `@`, and a short domain all fit inside this. */
+        const val EMAIL_LOOK = 96
 
         fun visibleIf(shown: Boolean): Int = if (shown) View.VISIBLE else View.GONE
 

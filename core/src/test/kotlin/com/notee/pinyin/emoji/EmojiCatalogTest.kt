@@ -51,6 +51,21 @@ class EmojiCatalogTest {
     }
 
     @Test
+    fun logoFacesAreRoundAndDoNotRepeatTheLast() {
+        val faces = catalog.logoFaces()
+        assertTrue("🤠" !in faces)
+        assertTrue("🤡" !in faces)
+        assertTrue("👻" !in faces)
+        assertTrue("💀" !in faces)
+        assertTrue("💩" !in catalog.emoji(EmojiCategory.FACE))
+        assertTrue("😕" in faces)
+        assertEquals(catalog.emoji(EmojiCategory.FACE).size - 4, faces.size)
+        assertEquals("😁", EmojiCatalog.pickLogoFace(listOf("😀", "😁", "😂"), "😀", 0))
+        assertEquals("😂", EmojiCatalog.pickLogoFace(listOf("😀", "😁", "😂"), "😀", 1))
+        assertEquals("😀", EmojiCatalog.pickLogoFace(listOf("😀"), "😀", 3))
+    }
+
+    @Test
     fun useReordersWithinItsCategoryOnly() {
         val hand = catalog.emoji(EmojiCategory.HAND)
         val page = catalog.frequentPage(mapOf(hand.last() to 3))

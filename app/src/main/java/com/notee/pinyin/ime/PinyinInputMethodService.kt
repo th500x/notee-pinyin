@@ -36,6 +36,7 @@ class PinyinInputMethodService : InputMethodService() {
         storage = Storage(this)
         val user = UserDictionary().apply {
             onRecorded = { code, text -> storage.write { addUserWord(code, text) } }
+            onSyllableRecorded = { digits, spelling -> storage.write { addSyllablePick(digits, spelling) } }
         }
         val emojiUse = EmojiUse(storage)
         val clips = ClipHistory(storage)
@@ -60,11 +61,12 @@ class PinyinInputMethodService : InputMethodService() {
         WordTransfer.onNotice = controller::notice
         storage.load { saved ->
             saved.userWords.forEach { user.load(it.code, it.text, it.count) }
+            saved.syllablePicks.forEach { user.loadSyllable(it.digits, it.spelling, it.count) }
             emojiUse.restore(saved.emojiUse)
             clips.restore(saved.clips)
         }
         clipboard = ClipboardWatcher(this, controller::onClipboardText)
-        if (clipboard.supported) clipboard.start()
+        controller.refreshClipboard = { if (clipboard.supported) clipboard.check() }
     }
 
     override fun onCreateInputView(): View = controller.createView(layoutInflater)
@@ -82,7 +84,6 @@ class PinyinInputMethodService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         controller.startInput(info, restarting)
-        if (clipboard.supported) clipboard.check()
     }
 
     /** Insets are often ready only once the window is actually on screen. */
@@ -116,7 +117,6 @@ class PinyinInputMethodService : InputMethodService() {
     override fun onDestroy() {
         WordTransfer.onImported = null
         WordTransfer.onNotice = null
-        clipboard.stop()
         storage.close()
         super.onDestroy()
     }

@@ -30,6 +30,10 @@ class Editor(private val service: InputMethodService) {
             inputClass == InputType.TYPE_CLASS_PHONE ||
             inputClass == InputType.TYPE_CLASS_DATETIME
 
+    /** The field itself asked for an email address. A plain text field is not one. */
+    val isEmail: Boolean
+        get() = inputClass == InputType.TYPE_CLASS_TEXT && variation in EMAIL_VARIATIONS
+
     /** The editor action enter performs, or null when enter is a line break. */
     val enterAction: Int?
         get() {
@@ -38,7 +42,60 @@ class Editor(private val service: InputMethodService) {
         }
 
     fun commit(text: CharSequence) {
-        service.currentInputConnection?.commitText(text, 1)
+        val connection = service.currentInputConnection ?: return
+        connection.beginBatchEdit()
+        try {
+            insert(connection, text)
+        } finally {
+            connection.endBatchEdit()
+        }
+    }
+
+    /**
+     * Replaces the letters immediately before the cursor when they are exactly [expected].
+     * False when the cursor is not sitting after those letters.
+     */
+    fun replaceBeforeCursor(expected: String, replacement: String): Boolean {
+        if (expected.isEmpty()) return false
+        val connection = service.currentInputConnection ?: return false
+        val before = connection.getTextBeforeCursor(expected.length, 0)?.toString() ?: return false
+        if (before != expected) return false
+        connection.beginBatchEdit()
+        try {
+            connection.finishComposingText()
+            connection.deleteSurroundingText(expected.length, 0)
+            insert(connection, replacement)
+        } finally {
+            connection.endBatchEdit()
+        }
+        return true
+    }
+
+    /** The space before the cursor goes, then [text]. One batch, so the space does not stay behind the mark. */
+    fun commitAfterSpace(text: CharSequence) {
+        val connection = service.currentInputConnection ?: return
+        connection.beginBatchEdit()
+        try {
+            connection.finishComposingText()
+            connection.deleteSurroundingText(1, 0)
+            insert(connection, text)
+        } finally {
+            connection.endBatchEdit()
+        }
+    }
+
+    /**
+     * Writes [text] and leaves the caret after it, without [InputConnection.commitText].
+     *
+     * On some phones `commitText` is the paste path: the system reads the clipboard to compare
+     * and shows 「已将剪贴板中的内容粘贴到微信」 while the chat app is in front (docs/02-0 §4).
+     * `setComposingText` then `finishComposingText` is the same edit. A field that refuses a
+     * composing span still gets [InputConnection.commitText].
+     */
+    private fun insert(connection: InputConnection, text: CharSequence) {
+        connection.finishComposingText()
+        if (connection.setComposingText(text, 1)) connection.finishComposingText()
+        else connection.commitText(text, 1)
     }
 
     /**
@@ -84,14 +141,21 @@ class Editor(private val service: InputMethodService) {
 
     fun textBeforeCursor(length: Int): CharSequence? = service.currentInputConnection?.getTextBeforeCursor(length, 0)
 
+    fun textAfterCursor(length: Int): CharSequence? = service.currentInputConnection?.getTextAfterCursor(length, 0)
+
     private companion object {
-        val TEXT_PASSWORDS = setOf(
+        private val TEXT_PASSWORDS = setOf(
             InputType.TYPE_TEXT_VARIATION_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
         )
 
-        val ACTIONS = setOf(
+        private val EMAIL_VARIATIONS = setOf(
+            InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+            InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
+        )
+
+        private val ACTIONS = setOf(
             EditorInfo.IME_ACTION_SEARCH,
             EditorInfo.IME_ACTION_SEND,
             EditorInfo.IME_ACTION_GO,

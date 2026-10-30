@@ -15,7 +15,12 @@ import kotlinx.coroutines.withContext
  */
 class Storage(context: Context) {
 
-    class Snapshot(val userWords: List<UserWordRow>, val emojiUse: Map<String, Int>, val clips: List<String>)
+    class Snapshot(
+        val userWords: List<UserWordRow>,
+        val syllablePicks: List<SyllablePickRow>,
+        val emojiUse: Map<String, Int>,
+        val clips: List<String>,
+    )
 
     private val database = PinyinDatabase(context.applicationContext)
     private val scope = CoroutineScope(
@@ -26,7 +31,7 @@ class Storage(context: Context) {
     /** Reads everything once and hands it over on the main thread. */
     fun load(onLoaded: (Snapshot) -> Unit) {
         scope.launch {
-            val snapshot = Snapshot(database.userWords(), database.emojiUse(), database.clips())
+            val snapshot = Snapshot(database.userWords(), database.syllablePicks(), database.emojiUse(), database.clips())
             withContext(Dispatchers.Main) { onLoaded(snapshot) }
         }
     }

@@ -2,7 +2,6 @@ package com.notee.pinyin.input
 
 import com.notee.pinyin.engine.Candidate
 import com.notee.pinyin.engine.CandidateItem
-import com.notee.pinyin.engine.SyllableEdge
 import com.notee.pinyin.engine.SyllableGraph
 import com.notee.pinyin.engine.SyllableTable
 import com.notee.pinyin.engine.UserDictionary
@@ -42,11 +41,17 @@ class T9Composer internal constructor(
         changed()
     }
 
-    /** Fixes the next open keys as [syllable], tapped in the preedit line. */
+    /**
+     * Fixes the next open keys as [syllable], tapped in the preedit line.
+     * A successful tap is remembered for this key run, the same way a chosen word is.
+     */
     fun choose(syllable: Int): Boolean {
         val start = openStart()
-        if (graph().edgesFrom(start).none { it.syllable == syllable }) return false
-        fixed += Fixed(start, start + syllables.spelling(syllable).length, syllable)
+        val graph = graph()
+        if (graph.edgesFrom(start).none { it.syllable == syllable && graph.reachesEnd(it.to) }) return false
+        val spelling = syllables.spelling(syllable)
+        fixed += Fixed(start, start + spelling.length, syllable)
+        user.recordSyllable(T9Keys.digitsOf(spelling), spelling)
         changed()
         return true
     }
@@ -104,21 +109,33 @@ class T9Composer internal constructor(
     }
 
     /**
-     * Syllables the next open keys can start with: the one the first candidate reads there, then
-     * longest and heaviest first. Shown only when there is a choice.
+     * Syllables the next open keys can start with, and only when the keys left after that
+     * syllable still split into whole syllables. A tail such as a lone `g` has no character,
+     * so that reading is left out (docs/01-0 §5). A reading this user already picked on these
+     * keys comes first; the rest keep the old order: the first candidate's reading, then longest,
+     * then heaviest. Shown only when there is a choice.
      */
     private fun choices(): List<SyllableChoice> {
         val start = openStart()
         val current = firstReadingAt(start)
-        val heads = graph().edgesFrom(start)
-            .sortedWith(
-                compareByDescending<SyllableEdge> { it.syllable == current }
-                    .thenByDescending { syllables.spelling(it.syllable).length }
-                    .thenByDescending { syllables.weight(it.syllable) },
-            )
+        val graph = graph()
+        val ranked = graph.edgesFrom(start)
+            .filter { graph.reachesEnd(it.to) }
             .map { it.syllable }
             .distinct()
-        return if (heads.size > 1) heads.map { SyllableChoice(it, syllables.spelling(it)) } else emptyList()
+            .sortedWith(
+                compareByDescending<Int> { remembered(it) }
+                    .thenByDescending { it == current }
+                    .thenByDescending { syllables.spelling(it).length }
+                    .thenByDescending { syllables.weight(it) },
+            )
+        return if (ranked.size > 1) ranked.map { SyllableChoice(it, syllables.spelling(it)) } else emptyList()
+    }
+
+    /** How often this user picked [syllable] for the keys that spell it. */
+    private fun remembered(syllable: Int): Int {
+        val spelling = syllables.spelling(syllable)
+        return user.syllableCount(T9Keys.digitsOf(spelling), spelling)
     }
 
     /**

@@ -10,4 +10,5 @@
     <color name="key_hint">#FFA3A6AD</color>
     <color name="preedit_text">#FF8AB4F8</color>
     <color name="strip_divider">#FF45474C</color>
+    <color name="switch_off">#FF6A6E76</color>
 </resources>

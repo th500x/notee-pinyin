@@ -25,6 +25,14 @@ class QwertyComposerTest {
     }
 
     @Test
+    fun zuLinIsLease() {
+        type("zulin")
+        val texts = composer.candidates.texts()
+        assertEquals("租赁", texts.first())
+        assertFalse("租金" in texts)
+    }
+
+    @Test
     fun oneSyllableShowsPinsThenBar() {
         type("de")
         assertEquals(listOf("的", "地", "得", "|"), composer.candidates.texts().take(4))
@@ -85,6 +93,15 @@ class QwertyComposerTest {
         assertEquals(1, user.count("ni hao", "你号"))
         assertEquals(1, user.count("hao", "号"))
         assertTrue(!composer.isComposing)
+    }
+
+    @Test
+    fun forgettingAPersonalWordRemovesItFromTheCandidates() {
+        user.record("ni hao", "拟好呀")
+        type("nihao")
+        assertTrue("拟好呀" in composer.candidates.texts())
+        assertTrue(user.forget("ni hao", "拟好呀"))
+        assertTrue("拟好呀" !in composer.candidates.texts())
     }
 
     @Test

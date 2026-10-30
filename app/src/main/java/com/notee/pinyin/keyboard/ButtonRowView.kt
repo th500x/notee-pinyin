@@ -22,8 +22,10 @@ class ButtonRowView @JvmOverloads constructor(context: Context, attrs: Attribute
         val repeats: Boolean = false,
         /** Drawn smaller, after [label]. The festival hint on 工具. */
         val mark: String? = null,
-        /** Same size as [label], with a wider gap. The 开/关 after 按键音. */
+        /** Same size as [label], with a wider gap. */
         val detail: String? = null,
+        /** A slider after [label]. Null means this button has no switch. */
+        val switchOn: Boolean? = null,
         /** Takes a slot and draws nothing, so the other button can sit in the left half. */
         val blank: Boolean = false,
         /** Overrides the row's text size. Festival rows use the emoji size. */
@@ -48,10 +50,39 @@ class ButtonRowView @JvmOverloads constructor(context: Context, attrs: Attribute
     /** A finger landed on an enabled button; feedback goes here. */
     var onPress: ((index: Int) -> Unit)? = null
 
+    /**
+     * The main toolbar reserves a `|` and a hide triangle at the right, in the same columns as
+     * the candidate row's `|` and ▼. Tool rows and emoji tabs leave this off and stay equal-width.
+     */
+    var showsEnd: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
+    /** The hide triangle. Not one of [buttons], and it does not play a key sound. */
+    var onEnd: (() -> Unit)? = null
+
+    /**
+     * When set, every label in this row starts where a centered [alignToLabel] plus its slider
+     * would start. Tool rows share the top row's left edge instead of centering on their own.
+     */
+    var alignToLabel: String? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
     private val painter = KeyPainter(context)
     private val textSize = painter.dimension(R.dimen.text_button)
+    private val barTextSize = painter.dimension(R.dimen.text_candidate)
+    private val barWidth = painter.dimension(R.dimen.strip_bar_width)
+    private val arrowWidth = painter.dimension(R.dimen.strip_arrow_width)
     private var labelSizes: List<Float> = emptyList()
     private val cell = RectF()
+    private val endRect = RectF()
     private val imageRect = RectF()
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private var pressed = -1
@@ -81,12 +112,21 @@ class ButtonRowView @JvmOverloads constructor(context: Context, attrs: Attribute
             val color = if (button.enabled) painter.textColor else painter.hintColor
             val mark = button.mark
             val detail = button.detail
+            val switchOn = button.switchOn
+            val at = contentLeft(cell)
             when {
-                mark != null -> painter.labelWithMark(canvas, cell, button.label, mark, labelSizes[i], color)
+                switchOn != null -> painter.labelWithSwitch(canvas, cell, button.label, labelSizes[i], color, switchOn, at)
+                mark != null -> painter.labelWithMark(canvas, cell, button.label, mark, labelSizes[i], color, at)
                 detail != null -> painter.labelWithDetail(canvas, cell, button.label, detail, labelSizes[i], color)
-                else -> painter.label(canvas, cell, button.label, labelSizes[i], color)
+                else -> painter.label(canvas, cell, button.label, labelSizes[i], color, at = at)
             }
         }
+        if (!showsEnd) return
+        endBounds(bar = true, endRect)
+        painter.label(canvas, endRect, "|", barTextSize, painter.hintColor)
+        endBounds(bar = false, endRect)
+        if (pressed == END) painter.cap(canvas, endRect, painter.keyPressedColor)
+        painter.outlineTriangle(canvas, endRect, painter.textColor)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -94,7 +134,11 @@ class ButtonRowView @JvmOverloads constructor(context: Context, attrs: Attribute
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val index = indexAt(event.x, event.y)
-                pressed = if (buttons.getOrNull(index)?.enabled == true) index else -1
+                pressed = when {
+                    index == END -> END
+                    buttons.getOrNull(index)?.enabled == true -> index
+                    else -> -1
+                }
                 invalidate()
                 if (pressed >= 0) {
                     onPress?.invoke(pressed)
@@ -105,9 +149,13 @@ class ButtonRowView @JvmOverloads constructor(context: Context, attrs: Attribute
                 }
             }
             MotionEvent.ACTION_UP -> {
-                val tapped = pressed.takeIf { it >= 0 && !buttons[it].repeats && it == indexAt(event.x, event.y) }
+                val index = indexAt(event.x, event.y)
+                val tapped = pressed
                 release()
-                tapped?.let { onTap?.invoke(it) }
+                when {
+                    tapped == END && index == END -> onEnd?.invoke()
+                    tapped >= 0 && index == tapped && !buttons[tapped].repeats -> onTap?.invoke(tapped)
+                }
             }
             MotionEvent.ACTION_CANCEL -> release()
         }
@@ -125,27 +173,66 @@ class ButtonRowView @JvmOverloads constructor(context: Context, attrs: Attribute
         invalidate()
     }
 
-    private val cellWidth: Float get() = (width - paddingLeft - paddingRight).toFloat() / buttons.size
+    /** Buttons share what the `|` and the hide triangle leave. Without [showsEnd], the whole row. */
+    private val buttonSpan: Float
+        get() {
+            val inner = (width - paddingLeft - paddingRight).toFloat()
+            val usable = if (showsEnd) inner - barWidth - arrowWidth else inner
+            return usable / buttons.size.coerceAtLeast(1)
+        }
+
+    private fun endBounds(bar: Boolean, out: RectF) {
+        val top = paddingTop.toFloat()
+        val bottom = (height - paddingBottom).toFloat()
+        val right = (width - paddingRight).toFloat()
+        val arrowLeft = right - arrowWidth
+        if (bar) out.set(arrowLeft - barWidth, top, arrowLeft, bottom) else out.set(arrowLeft, top, right, bottom)
+    }
 
     private fun indexAt(x: Float, y: Float): Int {
-        if (buttons.isEmpty() || y < paddingTop || y >= height - paddingBottom) return -1
+        if (y < paddingTop || y >= height - paddingBottom) return -1
+        if (showsEnd) {
+            endBounds(bar = false, cell)
+            if (cell.contains(x, y)) return END
+            endBounds(bar = true, cell)
+            if (cell.contains(x, y)) return -1
+        }
+        if (buttons.isEmpty() || buttonSpan <= 0f) return -1
         if (x < paddingLeft || x >= width - paddingRight) return -1
-        val index = ((x - paddingLeft) / cellWidth).toInt().coerceIn(0, buttons.lastIndex)
-        if (buttons[index].blank) return -1
+        val index = ((x - paddingLeft) / buttonSpan).toInt()
+        if (index !in buttons.indices || buttons[index].blank) return -1
         return index
     }
 
-    /** A 3:4 sample, as tall as the cap allows, centered in the cell. */
+    /** A 3:4 sample, as tall as the cap allows. Centered, unless the row shares a left edge. */
     private fun drawImage(canvas: Canvas, cell: RectF, image: Bitmap) {
         val inset = cell.height() * 0.14f
         val h = cell.height() - 2 * inset
         val w = h * 3f / 4f
-        imageRect.set(cell.centerX() - w / 2f, cell.centerY() - h / 2f, cell.centerX() + w / 2f, cell.centerY() + h / 2f)
+        val at = contentLeft(cell)
+        val left = if (at != null) at.coerceAtMost(cell.right - w) else cell.centerX() - w / 2f
+        imageRect.set(left, cell.centerY() - h / 2f, left + w, cell.centerY() + h / 2f)
         canvas.drawBitmap(image, null, imageRect, imagePaint)
     }
 
+    /** Left edge shared with a centered [alignToLabel] and its slider. Null keeps the old centering. */
+    private fun contentLeft(cell: RectF): Float? {
+        val anchor = alignToLabel ?: return null
+        if (cell.width() <= 0f) return null
+        val textW = painter.measure(anchor, textSize)
+        val switchW = painter.dimension(R.dimen.switch_width)
+        val gap = painter.dimension(R.dimen.switch_gap)
+        val pad = ((cell.width() - textW - gap - switchW) / 2f).coerceAtLeast(gap)
+        return cell.left + pad
+    }
+
     private fun cellOf(index: Int, out: RectF) {
-        val left = paddingLeft + index * cellWidth
-        out.set(left, paddingTop.toFloat(), left + cellWidth, (height - paddingBottom).toFloat())
+        val left = paddingLeft + index * buttonSpan
+        out.set(left, paddingTop.toFloat(), left + buttonSpan, (height - paddingBottom).toFloat())
+    }
+
+    private companion object {
+        /** Not a [buttons] index. The hide triangle. */
+        const val END = -2
     }
 }

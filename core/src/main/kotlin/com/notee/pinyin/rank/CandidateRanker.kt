@@ -12,6 +12,7 @@ import com.notee.pinyin.engine.UserDictionary
  * Orders the words found for a graph (docs/01-0).
  *
  * One syllable: its pins in table order, one `|`, then everything else by pick count and weight.
+ * [OrderAdjustments] replaces that leading run for the few rows listed there.
  * Several syllables: the sentence, whole-input words, words covering a leading part (longest first),
  * then characters of the first syllable with their pins in front. Each text appears once.
  */
@@ -53,7 +54,7 @@ class CandidateRanker(
             .map { it.syllable }
             .distinct()
             .sortedByDescending(syllables::weight)
-        val pinned = pinnedCharacters(heads, whole)
+        val pinned = pinnedCharacters(heads, whole, group = true)
         val items = Distinct()
         pinned.forEach(items::add)
         if (pinned.isNotEmpty()) items.bar()
@@ -74,20 +75,55 @@ class CandidateRanker(
             .sortedWith(compareByDescending<SyllableEdge> { it.to }.thenByDescending { syllables.weight(it.syllable) })
             .map { it.syllable }
             .distinct()
-        pinnedCharacters(heads, characters).forEach(items::add)
+        pinnedCharacters(heads, characters, group = false).forEach(items::add)
         byUse(characters).forEach(items::add)
-        return items.result
+        return phraseOrder(items.result)
     }
 
-    /** Pins of each head syllable in turn, as long as the dictionary offers them for this input. */
-    private fun pinnedCharacters(heads: List<Int>, pool: List<Candidate>): List<Candidate> {
+    /** Moves each phrase's earlier word to just before the later one (docs/03-0 §2). */
+    private fun phraseOrder(items: List<CandidateItem>): List<CandidateItem> {
+        val out = items.toMutableList()
+        for (phrase in OrderAdjustments.phrases) {
+            val atEarlier = out.indexOfFirst { (it as? CandidateItem.Word)?.candidate?.text == phrase.earlier }
+            val atLater = out.indexOfFirst { (it as? CandidateItem.Word)?.candidate?.text == phrase.later }
+            if (atEarlier < 0 || atLater < 0 || atEarlier < atLater) continue
+            val word = out.removeAt(atEarlier)
+            out.add(out.indexOfFirst { (it as? CandidateItem.Word)?.candidate?.text == phrase.later }, word)
+        }
+        return out
+    }
+
+    /**
+     * Pins of each head syllable in turn, as long as the dictionary offers them for this input.
+     * [group] is the single full-cover case: a matching [OrderAdjustments] row leads, by spelling
+     * rather than by syllable weight.
+     */
+    private fun pinnedCharacters(heads: List<Int>, pool: List<Candidate>, group: Boolean): List<Candidate> {
         val single = pool.filter { it.syllables.size == 1 }
+        if (group) {
+            val leading = OrderAdjustments.together(heads.map { syllables.spelling(it) }.toSet())
+            if (leading != null) {
+                val seen = leading.toSet()
+                return inTextOrder(leading, single) + syllablePins(heads, single).filter { it.text !in seen }
+            }
+        }
+        return syllablePins(heads, single)
+    }
+
+    private fun syllablePins(heads: List<Int>, single: List<Candidate>): List<Candidate> {
         val pinned = ArrayList<Candidate>()
         for (syllable in heads) {
-            for (char in pins.pins(syllable)) {
+            val order = OrderAdjustments.pinOrder(syllables.spelling(syllable), pins.pins(syllable))
+            for (char in order) {
                 single.firstOrNull { it.syllables[0] == syllable && it.text == char }?.let(pinned::add)
             }
         }
+        return pinned
+    }
+
+    private fun inTextOrder(chars: List<String>, single: List<Candidate>): List<Candidate> {
+        val pinned = ArrayList<Candidate>()
+        for (char in chars) single.firstOrNull { it.text == char }?.let(pinned::add)
         return pinned
     }
 

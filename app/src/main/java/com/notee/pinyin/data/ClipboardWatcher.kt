@@ -5,40 +5,32 @@ import android.content.Context
 import android.os.Build
 
 /**
- * Hears clipboard changes while this is the active keyboard and passes on plain text. Sensitive
- * clips (passwords, codes) and non-text clips are skipped (docs/02-0 §4).
+ * Reads the current plain-text clip when the clipboard page opens (docs/02-0 §4).
+ *
+ * The service is fetched only inside [check], and only the clipboard button calls [check].
+ * Typing never comes here: there is no listener, and this class never writes the clipboard.
+ * Sensitive clips and non-text clips are skipped. A paste toast during typing is the
+ * system's reaction to [android.view.inputmethod.InputConnection.commitText], which
+ * [com.notee.pinyin.ime.Editor] does not use for an ordinary commit.
  */
-class ClipboardWatcher(context: Context, private val onText: (String) -> Unit) : ClipboardManager.OnPrimaryClipChangedListener {
-    private val clipboard = context.getSystemService(ClipboardManager::class.java)
+class ClipboardWatcher(private val context: Context, private val onText: (String) -> Unit) {
 
     /** Sensitive clips are only marked from Android 13. Older releases do not keep a history. */
     val supported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
-    fun start() {
-        clipboard?.addPrimaryClipChangedListener(this)
-    }
-
-    fun stop() {
-        clipboard?.removePrimaryClipChangedListener(this)
-    }
-
-    override fun onPrimaryClipChanged() = check()
-
-    /** Reads the current clip. Also run when the keyboard opens, in case a change went unheard. */
+    /** Reads the current clip. Only called when the user opens the clipboard page. */
     fun check() {
-        readText()?.let(onText)
-    }
-
-    private fun readText(): String? {
+        val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
         val clip = try {
-            clipboard?.primaryClip
+            clipboard.primaryClip
         } catch (_: SecurityException) {
             null
-        } ?: return null
+        } ?: return
         val description = clip.description
-        if (description.extras?.getBoolean(EXTRA_IS_SENSITIVE) == true) return null
-        if (!description.hasMimeType("text/*") || clip.itemCount == 0) return null
-        return clip.getItemAt(0).text?.toString()?.takeIf { it.isNotBlank() }
+        if (description.extras?.getBoolean(EXTRA_IS_SENSITIVE) == true) return
+        if (!description.hasMimeType("text/*") || clip.itemCount == 0) return
+        val text = clip.getItemAt(0).text?.toString()?.takeIf { it.isNotBlank() } ?: return
+        onText(text)
     }
 
     private companion object {

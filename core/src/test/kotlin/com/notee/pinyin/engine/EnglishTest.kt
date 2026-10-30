@@ -15,6 +15,18 @@ class EnglishTest {
     }
 
     @Test
+    fun documeOffersDocumentBeforeDocumentary() {
+        val words = english.completions("docume")
+        val document = words.indexOf("document")
+        val documentary = words.indexOf("documentary")
+        assertEquals(0, document)
+        assertTrue(documentary > document)
+        val composer = EnglishComposer(english)
+        "docume".forEach(composer::type)
+        assertEquals("document", composer.completions().first())
+    }
+
+    @Test
     fun fullyTypedHelloIsFirst() {
         assertEquals("hello", english.completions("hello").first())
         val composer = EnglishComposer(english)
@@ -69,5 +81,42 @@ class EnglishTest {
     fun blankAndUnknownPrefixesAreEmpty() {
         assertTrue(english.completions("").isEmpty())
         assertTrue(english.completions("zzzqqq").isEmpty())
+    }
+
+    @Test
+    fun placeNamesTakeACapitalWhenFinished() {
+        assertEquals("Shanghai", english.completions("shanghai").first())
+        assertEquals("Bangkok", english.completions("bangkok").first())
+        val composer = EnglishComposer(english)
+        for ((typed, spelled) in listOf("bangkok" to "Bangkok", "pattaya" to "Pattaya", "shanghai" to "Shanghai")) {
+            composer.clear()
+            typed.forEach(composer::type)
+            assertEquals(spelled, composer.placeSpelling())
+            assertTrue(composer.completions().none { it.equals(typed, ignoreCase = true) })
+        }
+        composer.clear()
+        "Bangkok".forEach(composer::type)
+        assertEquals(null, composer.placeSpelling())
+        composer.clear()
+        "march".forEach(composer::type)
+        assertEquals(null, composer.placeSpelling())
+        composer.clear()
+        "shang".forEach(composer::type)
+        val shanghai = composer.completions().indexOf("Shanghai")
+        assertTrue(shanghai >= 0)
+        assertEquals("Shanghai", composer.selection(shanghai)?.word)
+        assertEquals(true, composer.selection(shanghai)?.replace)
+        composer.clear()
+        "patt".forEach(composer::type)
+        val words = composer.completions()
+        val pattern = words.indexOf("pattern")
+        val pattaya = words.indexOf("Pattaya")
+        assertTrue(pattern >= 0)
+        assertTrue(pattaya > pattern)
+        composer.clear()
+        "hel".forEach(composer::type)
+        val hello = composer.completions().indexOf("hello")
+        assertTrue(hello >= 0)
+        assertEquals(false, composer.selection(hello)?.replace)
     }
 }

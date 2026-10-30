@@ -68,7 +68,8 @@
                 <com.notee.pinyin.keyboard.ButtonRowView
                     android:id="@+id/tool_festival_test"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/tool_row_height" />
+                    android:layout_height="@dimen/tool_row_height"
+                    android:visibility="gone" />
 
                 <com.notee.pinyin.keyboard.ButtonRowView
                     android:id="@+id/word_actions"

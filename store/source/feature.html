@@ -1,0 +1,42 @@
+﻿<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1024px; height: 500px; overflow: hidden; background: #0c274f; }
+.stage {
+  position: relative; width: 1024px; height: 500px; font-family: "Segoe UI", sans-serif;
+  background:
+    radial-gradient(ellipse 48% 78% at 76% 48%, rgba(106,171,245,.32) 0%, rgba(106,171,245,0) 68%),
+    linear-gradient(155deg, #1d56a8 0%, #143e7c 46%, #0c274f 100%);
+}
+.brand { position: absolute; left: 56px; top: 64px; display: flex; align-items: center; }
+.brand img { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 10px 22px rgba(0,0,0,.38); }
+.lockup { margin-left: 22px; }
+.name {
+  color: #fff; font-weight: 700; font-size: 42px; letter-spacing: .2px; line-height: 1;
+  padding-bottom: 8px; border-bottom: 5px solid #6aabf5; display: inline-block;
+}
+.headline {
+  position: absolute; left: 56px; top: 214px; width: 440px;
+  color: #fff; font-weight: 650; font-size: 40px; line-height: 1.18;
+}
+.sub {
+  position: absolute; left: 56px; top: 348px; width: 420px;
+  color: #c5d7ee; font-size: 22px; line-height: 1.45;
+}
+.frame {
+  position: absolute; right: 40px; top: 86px; width: 470px; height: 305px;
+  border-radius: 16px; overflow: hidden; background: #1c1e22;
+  box-shadow: 0 18px 40px rgba(0,0,0,.48), 0 0 0 1px rgba(255,255,255,.08);
+}
+.frame img { display: block; width: 470px; height: 305px; }
+</style></head><body>
+<div class="stage">
+  <div class="brand">
+    <img src="icon-512.png" alt="">
+    <div class="lockup"><div class="name">Mini Pinyin</div></div>
+  </div>
+  <div class="headline">Common characters stay put.</div>
+  <div class="sub">Offline Pinyin input method.<br>Free forever. No ads.</div>
+  <div class="frame"><img src="keys.png" alt=""></div>
+</div>
+</body></html>
+

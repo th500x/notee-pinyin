@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
@@ -7,6 +9,12 @@ val appVersionCode = 1
 
 // GPL-3.0 source address for the setup page; the same address goes into the store listing.
 val sourceUrl = providers.gradleProperty("notee.pinyin.sourceUrl").orElse("").get().trim()
+
+// Upload key for Play. keystore.properties and the .jks stay outside git.
+val uploadKey = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
 
 android {
     namespace = "com.notee.pinyin"
@@ -22,8 +30,22 @@ android {
         buildConfigField("String", "SOURCE_URL", "\"$urlLiteral\"")
     }
 
+    signingConfigs {
+        if (!uploadKey.isEmpty) {
+            create("upload") {
+                storeFile = file(uploadKey.getProperty("storeFile"))
+                storePassword = uploadKey.getProperty("storePassword")
+                keyAlias = uploadKey.getProperty("keyAlias")
+                keyPassword = uploadKey.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (!uploadKey.isEmpty) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
@@ -47,6 +69,7 @@ android {
 dependencies {
     implementation(project(":core"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    testImplementation("junit:junit:4.13.2")
 }
 
 /** Runs the `:core` dictionary compiler: rime-ice + pins + OpenCC + English → `lexicon.bin`, `s2t.bin`, `english.bin`. */

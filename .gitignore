@@ -13,6 +13,7 @@ app/build/
 core/build/
 *.keystore
 *.jks
+/keystore.properties
 /docs/
 __pycache__/
 *.py[cod]

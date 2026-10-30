@@ -11,6 +11,8 @@ data class KeyCaps(
     val password: Boolean,
     val emojiSlots: List<String?>,
     val symbolLanguage: Language,
+    /** Letter-page comma and period stay ASCII, so a domain can be typed. The 中/英 label does not follow this. */
+    val email: Boolean = false,
 )
 
 /** The key pages of docs/01-1 §3 to §6, on unit grids. */
@@ -35,7 +37,7 @@ class KeyboardLayouts(private val resources: Resources) {
         keys += delete(17f, 2f, 3f)
         keys += Key(label(R.string.key_symbols), KeyAction.Symbols, 0f, 3f, 2.5f, style = KeyStyle.FUNCTION)
         keys += Key(label(R.string.key_numbers), KeyAction.Numbers, 2.5f, 3f, 2.5f, style = KeyStyle.FUNCTION)
-        val chinese = caps.language == Language.CHINESE
+        val chinese = caps.language == Language.CHINESE && !caps.email
         val comma = if (chinese) "，" else ","
         val period = if (chinese) "。" else "."
         keys += Key(comma, KeyAction.Commit(comma), 5f, 3f, 2f)
@@ -50,7 +52,10 @@ class KeyboardLayouts(private val resources: Resources) {
     private fun t9(caps: KeyCaps): KeyGrid {
         val keys = symbolColumn(T9_COLUMN)
         val slots = caps.emojiSlots
-        keys += emojiSlot(0, slots.getOrNull(0), 2f, 0f, 3f, caps, digit = "1")
+        keys += Key(
+            "", KeyAction.LogoFace, 2f, 0f, 3f,
+            hint = "1", longPress = KeyAction.Commit("1"), image = R.drawable.key_logo,
+        )
         T9_GROUPS.forEachIndexed { i, letters ->
             val cell = i + 1
             val digit = ('2' + i).toString()
@@ -143,10 +148,7 @@ class KeyboardLayouts(private val resources: Resources) {
         return Key(text, KeyAction.ToggleLanguage, x, y, width, style = if (caps.password) KeyStyle.DISABLED else KeyStyle.FUNCTION)
     }
 
-    /**
-     * [digit] stays with the key's place. Emoji one sits where 清除 used to, so holding it commits `1`
-     * instead of opening the emoji page. Emoji two has no digit; holding it still changes the pin.
-     */
+    /** The right-column emoji. Holding it opens the page to change the pin; it has no digit. */
     private fun emojiSlot(
         slot: Int,
         emoji: String?,
@@ -154,17 +156,15 @@ class KeyboardLayouts(private val resources: Resources) {
         y: Float,
         width: Float,
         caps: KeyCaps,
-        digit: String? = null,
     ): Key {
         val action = KeyAction.EmojiSlot(slot)
-        val held = digit?.let { KeyAction.Commit(it) } ?: action
         return when {
             caps.password -> Key(label(R.string.key_emoji_unset), action, x, y, width, style = KeyStyle.DISABLED)
             emoji == null -> Key(
                 label(R.string.key_emoji_unset), action, x, y, width,
-                hint = digit, longPress = held, style = KeyStyle.PLACEHOLDER,
+                longPress = action, style = KeyStyle.PLACEHOLDER,
             )
-            else -> Key(emoji, action, x, y, width, hint = digit, longPress = held)
+            else -> Key(emoji, action, x, y, width, longPress = action)
         }
     }
 

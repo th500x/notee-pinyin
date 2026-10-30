@@ -26,12 +26,13 @@ abstract class Composer internal constructor(
     protected val syllables: SyllableTable,
     private val search: WordSearch,
     private val ranker: CandidateRanker,
-    private val user: UserDictionary,
+    protected val user: UserDictionary,
 ) {
     private class Selection(val text: String, val syllables: IntArray, val end: Int)
 
     private val selections = ArrayList<Selection>()
     private var cached: CandidateList? = null
+    private var cachedRevision = -1
 
     abstract val isComposing: Boolean
 
@@ -61,11 +62,18 @@ abstract class Composer internal constructor(
     protected val chosenSyllables: List<Int> get() = selections.flatMap { it.syllables.asList() }
 
     val candidates: CandidateList
-        get() = cached ?: compute().also { cached = it }
+        get() {
+            val ready = cached
+            if (ready != null && cachedRevision == user.revision) return ready
+            return compute().also {
+                cached = it
+                cachedRevision = user.revision
+            }
+        }
 
     /** Takes [candidate]. Returns the text to commit once nothing is left open, else null. */
     fun select(candidate: Candidate): String? {
-        selections += Selection(candidate.text, candidate.syllables, candidate.end)
+        selections += Selection(candidate.text, candidate.syllables.copyOf(), candidate.end)
         changed()
         if (!isFullyChosen) return null
         learn()

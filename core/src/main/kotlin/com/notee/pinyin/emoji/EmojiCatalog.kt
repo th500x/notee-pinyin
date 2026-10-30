@@ -38,6 +38,9 @@ class EmojiCatalog(private val byCategory: Map<EmojiCategory, List<String>>) {
 
     fun emoji(category: EmojiCategory): List<String> = byCategory[category].orEmpty()
 
+    /** Round faces the 9-key 「极」 key can send. Cowboy, clown, ghost and skull stay on the 黄脸 page. */
+    fun logoFaces(): List<String> = emoji(EmojiCategory.FACE).filter { it !in LOGO_SKIP }
+
     /** Same catalog without what the device cannot draw. */
     fun filter(canShow: (String) -> Boolean): EmojiCatalog = EmojiCatalog(byCategory.mapValues { (_, list) -> list.filter(canShow) })
 
@@ -68,6 +71,18 @@ class EmojiCatalog(private val byCategory: Map<EmojiCategory, List<String>>) {
         const val COLUMNS = 7
         const val ROWS = 5
         private const val HALF = 3
+
+        private val LOGO_SKIP = setOf("🤠", "🤡", "👻", "💀")
+
+        /**
+         * One face from [faces]. [roll] may be any int. When [previous] is in the list and another
+         * face exists, that one is skipped so two taps in a row differ.
+         */
+        fun pickLogoFace(faces: List<String>, previous: String?, roll: Int): String? {
+            val choices = if (faces.size > 1 && previous in faces) faces.filter { it != previous } else faces
+            if (choices.isEmpty()) return null
+            return choices[roll.mod(choices.size)]
+        }
 
         /** Reads `category<TAB>emoji emoji …` lines. */
         fun parse(text: String): EmojiCatalog {

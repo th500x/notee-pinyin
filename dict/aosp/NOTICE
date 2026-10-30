@@ -194,4 +194,6 @@ Includes Dictionaries © Lexiteria LLC.  Used by permission.
 en_next.tsv is a next-word count derived from the English sentences of the
 Tatoeba Corpus (https://tatoeba.org), licensed CC BY 2.0. The sentences
 themselves are not bundled. Attribution: Tatoeba contributors.
+Recounted 2026-10-30 from the English sentence export. Adjacent words only.
+A follower is kept when it occurs at least 4 times, and at most 12 per word.
 

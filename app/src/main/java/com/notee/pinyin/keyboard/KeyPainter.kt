@@ -1,8 +1,10 @@
 package com.notee.pinyin.keyboard
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.icu.text.BreakIterator
 import android.text.TextPaint
@@ -28,6 +30,10 @@ class KeyPainter(context: Context) {
     val deleteTextColor = context.getColor(R.color.key_delete_text)
     val accentColor = context.getColor(R.color.preedit_text)
     val dividerColor = context.getColor(R.color.strip_divider)
+    val boardColor = context.getColor(R.color.keyboard_background)
+    private val switchOnColor = context.getColor(R.color.switch_on)
+    private val switchOffColor = context.getColor(R.color.switch_off)
+    private val switchThumbColor = context.getColor(R.color.switch_thumb)
 
     private val gap = resources.getDimension(R.dimen.key_gap)
     private val radius = resources.getDimension(R.dimen.key_radius)
@@ -35,8 +41,16 @@ class KeyPainter(context: Context) {
     private val glyphSize = resources.getDimension(R.dimen.text_key)
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val triangle = Path()
     val text = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val inset = RectF()
+    private val imageRect = RectF()
+    private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
     fun dimension(id: Int): Float = resources.getDimension(id)
 
@@ -50,7 +64,7 @@ class KeyPainter(context: Context) {
         canvas.drawRoundRect(inset, radius, radius, fill)
     }
 
-    /** [label] centered in [cell], cut with … at [cut] when wider than the cell. */
+    /** [label] centered in [cell], or starting at [at] when that edge is set. Cut with … at [cut] when wider than the cell. */
     fun label(
         canvas: Canvas,
         cell: RectF,
@@ -58,9 +72,10 @@ class KeyPainter(context: Context) {
         size: Float,
         color: Int,
         cut: TextUtils.TruncateAt = TextUtils.TruncateAt.END,
+        at: Float? = null,
     ) {
         text.color = color
-        val room = cell.width() - 2 * gap
+        val room = if (at != null) (cell.right - at - gap).coerceAtLeast(0f) else cell.width() - 2 * gap
         // Six ASCII dots are the Chinese ellipsis. Shrinking keeps every dot; ellipsizing would
         // swap the tail for …, and this phone's font draws that character as two dots.
         var drawSize = size
@@ -72,12 +87,75 @@ class KeyPainter(context: Context) {
         text.textSize = drawSize
         val shown = if (text.measureText(label) <= room) label else TextUtils.ellipsize(label, text, room, cut).toString()
         val baseline = cell.centerY() - (text.descent() + text.ascent()) / 2
-        canvas.drawText(shown, cell.centerX(), baseline, text)
+        if (at == null) {
+            canvas.drawText(shown, cell.centerX(), baseline, text)
+        } else {
+            val saved = text.textAlign
+            text.textAlign = android.graphics.Paint.Align.LEFT
+            canvas.drawText(shown, at, baseline, text)
+            text.textAlign = saved
+        }
+    }
+
+    /**
+     * [label] and a slider. On is a red track with the thumb at the right.
+     * Off is a gray track with the thumb at the left (docs/01-1 §1).
+     * [at] is the label's left edge; without it the pair is centered in [cell].
+     */
+    fun labelWithSwitch(
+        canvas: Canvas,
+        cell: RectF,
+        label: String,
+        size: Float,
+        color: Int,
+        on: Boolean,
+        at: Float? = null,
+    ) {
+        val trackW = resources.getDimension(R.dimen.switch_width)
+        val trackH = resources.getDimension(R.dimen.switch_height)
+        val gap = resources.getDimension(R.dimen.switch_gap)
+        text.color = color
+        text.textSize = size
+        var labelWidth = text.measureText(label)
+        var drawSize = size
+        var drawTrackW = trackW
+        var drawTrackH = trackH
+        var drawGap = gap
+        val room = if (at != null) (cell.right - at - this.gap).coerceAtLeast(0f) else cell.width() - 2 * this.gap
+        val total = labelWidth + gap + trackW
+        if (room > 0f && total > room) {
+            val scale = room / total
+            drawSize *= scale
+            labelWidth *= scale
+            drawTrackW *= scale
+            drawTrackH *= scale
+            drawGap *= scale
+        }
+        text.textSize = drawSize
+        val baseline = cell.centerY() - (text.descent() + text.ascent()) / 2
+        val left = at ?: (cell.centerX() - (labelWidth + drawGap + drawTrackW) / 2)
+        val saved = text.textAlign
+        text.textAlign = android.graphics.Paint.Align.LEFT
+        canvas.drawText(label, left, baseline, text)
+        text.textAlign = saved
+
+        val trackLeft = left + labelWidth + drawGap
+        val trackTop = cell.centerY() - drawTrackH / 2f
+        inset.set(trackLeft, trackTop, trackLeft + drawTrackW, trackTop + drawTrackH)
+        fill.color = if (on) switchOnColor else switchOffColor
+        canvas.drawRoundRect(inset, drawTrackH / 2f, drawTrackH / 2f, fill)
+        val pad = drawTrackH * 0.12f
+        val diameter = drawTrackH - 2f * pad
+        val thumbLeft = if (on) inset.right - pad - diameter else inset.left + pad
+        val thumbTop = inset.top + pad
+        inset.set(thumbLeft, thumbTop, thumbLeft + diameter, thumbTop + diameter)
+        fill.color = switchThumbColor
+        canvas.drawRoundRect(inset, diameter / 2f, diameter / 2f, fill)
     }
 
     /**
      * [label] and [detail] at the same size, centered as a pair.
-     * The gap is a little wider than one ideographic space, which is what the sound switch uses.
+     * The gap is a little wider than one ideographic space.
      */
     fun labelWithDetail(canvas: Canvas, cell: RectF, label: String, detail: String, size: Float, color: Int) {
         text.color = color
@@ -105,8 +183,16 @@ class KeyPainter(context: Context) {
         text.textAlign = saved
     }
 
-    /** [label] at [size], then [mark] smaller, the pair centered on the same baseline. */
-    fun labelWithMark(canvas: Canvas, cell: RectF, label: String, mark: String, size: Float, color: Int) {
+    /** [label] at [size], then [mark] smaller. [at] is the left edge; without it the pair is centered. */
+    fun labelWithMark(
+        canvas: Canvas,
+        cell: RectF,
+        label: String,
+        mark: String,
+        size: Float,
+        color: Int,
+        at: Float? = null,
+    ) {
         text.color = color
         var drawSize = size
         var markSize = size * MARK_SCALE
@@ -115,7 +201,7 @@ class KeyPainter(context: Context) {
         text.textSize = markSize
         var markWidth = text.measureText(mark)
         var space = drawSize * 0.08f
-        val room = cell.width() - 2 * gap
+        val room = if (at != null) (cell.right - at - gap).coerceAtLeast(0f) else cell.width() - 2 * gap
         val total = labelWidth + space + markWidth
         if (room > 0f && total > room) {
             val scale = room / total
@@ -127,13 +213,27 @@ class KeyPainter(context: Context) {
         }
         text.textSize = drawSize
         val baseline = cell.centerY() - (text.descent() + text.ascent()) / 2
-        val left = cell.centerX() - (labelWidth + space + markWidth) / 2
+        val left = at ?: (cell.centerX() - (labelWidth + space + markWidth) / 2)
         val saved = text.textAlign
         text.textAlign = android.graphics.Paint.Align.LEFT
         canvas.drawText(label, left, baseline, text)
         text.textSize = markSize
         canvas.drawText(mark, left + labelWidth + space, baseline, text)
         text.textAlign = saved
+    }
+
+    /**
+     * [bitmap] centered at [height], the same em the letter keys use. [color] tints it, so the
+     * 9-key mark can sit in the key gray instead of the brand blue.
+     */
+    fun image(canvas: Canvas, cell: RectF, bitmap: Bitmap, height: Float, color: Int) {
+        if (bitmap.height <= 0 || height <= 0f) return
+        val width = height * bitmap.width / bitmap.height
+        val left = cell.centerX() - width / 2f
+        val top = cell.centerY() - height / 2f
+        imageRect.set(left, top, left + width, top + height)
+        imagePaint.colorFilter = android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, null, imageRect, imagePaint)
     }
 
     /** Small text in the upper right corner: what a long press gives. */
@@ -144,12 +244,32 @@ class KeyPainter(context: Context) {
         canvas.drawText(hint, x, cell.top + gap + hintSize, text)
     }
 
-    fun line(canvas: Canvas, x: Float, top: Float, bottom: Float) {
-        fill.color = dividerColor
-        canvas.drawRect(x, top, x + resources.displayMetrics.density, bottom, fill)
+    /** A solid rectangle. The candidate arrow uses it so the hide glyph underneath does not show through. */
+    fun fillRect(canvas: Canvas, cell: RectF, color: Int) {
+        fill.color = color
+        canvas.drawRect(cell, fill)
     }
 
-    /** The horizontal [line]: across [cell] less a gap at each end, through its middle. */
+    /**
+     * A down-pointing triangle drawn as a stroke, not the filled ▼ of the candidate row.
+     * The toolbar's hide control uses it so the two stay easy to tell apart.
+     */
+    fun outlineTriangle(canvas: Canvas, cell: RectF, color: Int) {
+        val cx = cell.centerX()
+        val cy = cell.centerY()
+        val halfH = minOf(cell.height() * 0.2f, cell.width() * 0.18f).coerceAtLeast(1f)
+        val halfW = halfH * 1.2f
+        triangle.rewind()
+        triangle.moveTo(cx - halfW, cy - halfH * 0.55f)
+        triangle.lineTo(cx + halfW, cy - halfH * 0.55f)
+        triangle.lineTo(cx, cy + halfH * 0.85f)
+        triangle.close()
+        stroke.color = color
+        stroke.strokeWidth = resources.displayMetrics.density * 1.5f
+        canvas.drawPath(triangle, stroke)
+    }
+
+    /** A horizontal rule across [cell], less a gap at each end, through its middle. */
     fun rule(canvas: Canvas, cell: RectF) {
         fill.color = dividerColor
         val y = cell.centerY()
@@ -178,7 +298,7 @@ class KeyPainter(context: Context) {
         /** Festival dates and the ✨ after 工具. Smaller than the label, same baseline. */
         const val MARK_SCALE = 0.62f
 
-        /** Space between 按键音 and 开/关, in ems. A little more than one ideographic space. */
+        /** Space between a label and its detail, in ems. A little more than one ideographic space. */
         const val DETAIL_GAP = 1.6f
 
         fun isSingleGlyph(label: String): Boolean {

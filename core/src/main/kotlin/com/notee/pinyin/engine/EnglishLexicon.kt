@@ -7,8 +7,9 @@ import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
 /**
- * Completions are sorted by lowercase spelling. Next-word heads are too.
- * A prefix scan is one ordered walk; twenty thousand words need no extra index.
+ * Completions are stored in spelling order. A prefix scan is one ordered walk.
+ * Display order is AOSP frequency, then a short word ahead of a longer word that extends it
+ * when the two scores are close (docs/01-0 英文).
  */
 class EnglishLexicon internal constructor(buffer: ByteBuffer) {
     private val data: ByteBuffer = buffer.duplicate().apply { order(ByteOrder.LITTLE_ENDIAN) }
@@ -37,14 +38,43 @@ class EnglishLexicon internal constructor(buffer: ByteBuffer) {
             else rest += word
             index++
         }
-        rest.sortByDescending { it.weight }
         val out = ArrayList<String>(EnglishFormat.COMPLETIONS)
         if (exact != null) out += exact
-        for (word in rest) {
+        for (word in byStem(rest)) {
             if (out.size == EnglishFormat.COMPLETIONS) break
             out += word.display
         }
         return out
+    }
+
+    /**
+     * Highest frequency first. A shorter word already in this list moves to just before a longer
+     * word that begins with it, when the longer score is at most [STEM_MARGIN] ahead.
+     * AOSP `f` is a log score: `documentary` is 132 and `document` is 128.
+     */
+    private fun byStem(words: List<Scored>): List<Scored> {
+        val pending = words.sortedWith(
+            compareByDescending<Scored> { it.weight }.thenBy { it.key.length }.thenBy { it.key },
+        ).take(STEM_POOL).toMutableList()
+        val placed = ArrayList<Scored>(pending.size)
+        while (pending.isNotEmpty()) {
+            val next = pending.first()
+            val stem = pending.asSequence()
+                .filter {
+                    it.key.length < next.key.length &&
+                        next.key.startsWith(it.key) &&
+                        it.weight + STEM_MARGIN >= next.weight
+                }
+                .maxByOrNull { it.key.length }
+            if (stem != null) {
+                pending.remove(stem)
+                placed += stem
+            } else {
+                pending.removeAt(0)
+                placed += next
+            }
+        }
+        return placed
     }
 
     /** Words that follow [word], already ordered for display. Empty when unknown. */
@@ -115,6 +145,12 @@ class EnglishLexicon internal constructor(buffer: ByteBuffer) {
     private class Next(val key: String, val words: List<String>)
 
     companion object {
+        /** How far above a stem a longer word may score and still follow that stem. */
+        private const val STEM_MARGIN = 8
+
+        /** Highest-frequency matches considered for that move. The row only shows [EnglishFormat.COMPLETIONS]. */
+        private const val STEM_POOL = 64
+
         fun from(buffer: ByteBuffer): EnglishLexicon = EnglishLexicon(buffer)
 
         fun open(file: File): EnglishLexicon =

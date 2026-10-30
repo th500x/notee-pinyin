@@ -13,4 +13,4 @@ enum class Script { SIMPLIFIED, TRADITIONAL }
 enum class Page { LETTERS, NUMBERS, SYMBOLS }
 
 /** What fills the area under the strip. */
-enum class Panel { KEYS, CANDIDATES, EFFECTS, CLIPBOARD, EMOJI }
+enum class Panel { KEYS, CANDIDATES, SYLLABLES, EFFECTS, CLIPBOARD, EMOJI }

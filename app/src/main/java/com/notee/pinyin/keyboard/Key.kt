@@ -31,6 +31,9 @@ sealed interface KeyAction {
     data class SymbolLanguage(val language: Language) : KeyAction
 
     data class EmojiSlot(val slot: Int) : KeyAction
+
+    /** 9-key 「极」: a random round face. The hold, when set, still commits the corner digit. */
+    data object LogoFace : KeyAction
 }
 
 enum class KeyStyle {
@@ -63,6 +66,8 @@ class Key(
     val longPress: KeyAction? = null,
     val style: KeyStyle = KeyStyle.NORMAL,
     val repeats: Boolean = false,
+    /** Drawn in place of [label] when not 0. The corner [hint] stays. */
+    val image: Int = 0,
 )
 
 /** A page of keys on a [columns] × [rows] unit grid; the view stretches units to its size. */

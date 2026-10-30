@@ -17,6 +17,11 @@ class UserDictionary {
 
     var onRecorded: ((code: String, text: String) -> Unit)? = null
 
+    /** A 9-key reading the user picked for the keys that spell it. Not a chosen word. */
+    var onSyllableRecorded: ((digits: String, spelling: String) -> Unit)? = null
+
+    private val syllablePicks = HashMap<String, HashMap<String, Int>>()
+
     /**
      * False in a field that asked the keyboard not to learn (incognito, some banking apps).
      * Picks then change nothing, in memory or on disk.
@@ -74,6 +79,44 @@ class UserDictionary {
         onRecorded?.invoke(code, text)
     }
 
+    /** How often [spelling] was picked for the 9-key run [digits]. */
+    fun syllableCount(digits: String, spelling: String): Int = syllablePicks[digits]?.get(spelling) ?: 0
+
+    /** Every stored reading, for an export file. */
+    fun learnedSyllables(): List<LearnedSyllable> {
+        val out = ArrayList<LearnedSyllable>()
+        for ((digits, group) in syllablePicks) {
+            for ((spelling, count) in group) {
+                if (count > 0) out += LearnedSyllable(digits, spelling, count)
+            }
+        }
+        return out
+    }
+
+    /**
+     * Raises a stored reading up to [count] when the file has more. A smaller incoming count
+     * leaves the local one alone. This is not a pick, so [onSyllableRecorded] is not called.
+     */
+    fun raiseSyllable(digits: String, spelling: String, count: Int) {
+        if (count > syllableCount(digits, spelling)) putSyllable(digits, spelling, count)
+    }
+
+    /** One tap on a 9-key reading. Ignored when [learning] is off; deleting the keys does not undo it. */
+    fun recordSyllable(digits: String, spelling: String) {
+        if (!learning) return
+        putSyllable(digits, spelling, syllableCount(digits, spelling) + 1)
+        onSyllableRecorded?.invoke(digits, spelling)
+    }
+
+    /** Adds a stored reading without reporting it back. Adding keeps a tap made while rows were loading. */
+    fun loadSyllable(digits: String, spelling: String, count: Int) {
+        if (count > 0) putSyllable(digits, spelling, syllableCount(digits, spelling) + count)
+    }
+
+    private fun putSyllable(digits: String, spelling: String, count: Int) {
+        syllablePicks.getOrPut(digits) { HashMap(2) }[spelling] = count
+    }
+
     /**
      * Adds a stored row without reporting it back. Adding, not replacing, keeps picks made
      * while the rows were still loading.
@@ -82,8 +125,29 @@ class UserDictionary {
         if (count > 0) put(code, text, count(code, text) + count)
     }
 
+    /**
+     * Drops one learned word. A word that also lives in the main dictionary can still be
+     * suggested; it only loses this personal count. Returns false when it was not stored.
+     */
+    fun forget(code: String, text: String): Boolean {
+        val group = words[code] ?: return false
+        if (group.remove(text) == null) return false
+        if (group.isEmpty()) words.remove(code)
+        prefixes.clear()
+        longer.clear()
+        for (stored in words.keys) remember(stored)
+        revision++
+        return true
+    }
+
     private fun put(code: String, text: String, count: Int) {
         words.getOrPut(code) { HashMap(2) }[text] = count
+        remember(code)
+        revision++
+    }
+
+    /** [code] and each shorter `ni` inside `ni hao`, so a longer word can still be found. */
+    private fun remember(code: String) {
         var space = code.indexOf(' ')
         while (space >= 0) {
             val prefix = code.substring(0, space)
@@ -92,6 +156,5 @@ class UserDictionary {
             space = code.indexOf(' ', space + 1)
         }
         prefixes += code
-        revision++
     }
 }

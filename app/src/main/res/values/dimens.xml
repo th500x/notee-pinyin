@@ -13,13 +13,24 @@
     <dimen name="grid_cell_min_width">64dp</dimen>
     <dimen name="grid_row_height">52dp</dimen>
     <dimen name="strip_item_padding">14dp</dimen>
+    <!-- Tightest inset when a long word would otherwise leave a wide empty gap. -->
+    <dimen name="strip_item_padding_min">4dp</dimen>
+    <!-- Unused width at which that tightening starts. One more character is a smaller remainder. -->
+    <dimen name="strip_item_hole">56dp</dimen>
     <dimen name="strip_arrow_width">44dp</dimen>
+    <!-- The `|` immediately left of that arrow, on the toolbar and the candidate row. -->
+    <dimen name="strip_bar_width">18dp</dimen>
 
     <dimen name="text_key">22sp</dimen>
     <dimen name="text_key_word">16sp</dimen>
     <dimen name="text_key_hint">10sp</dimen>
     <dimen name="text_candidate">18sp</dimen>
+    <!-- Smallest candidate text, used only after the tight inset still cannot show the next word. -->
+    <dimen name="text_candidate_min">14sp</dimen>
     <dimen name="text_preedit">13sp</dimen>
     <dimen name="text_button">15sp</dimen>
+    <dimen name="switch_width">36dp</dimen>
+    <dimen name="switch_height">20dp</dimen>
+    <dimen name="switch_gap">8dp</dimen>
     <dimen name="text_emoji">26sp</dimen>
 </resources>

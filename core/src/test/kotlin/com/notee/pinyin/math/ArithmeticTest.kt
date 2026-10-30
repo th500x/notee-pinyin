@@ -29,12 +29,25 @@ class ArithmeticTest {
     }
 
     @Test
-    fun answersKeepSixPlacesWithoutTrailingZeros() {
-        assertEquals("0.333333", Arithmetic.evaluate("1/3"))
-        assertEquals("0.666667", Arithmetic.evaluate("2/3"))
+    fun answersKeepTwoPlacesWithoutTrailingZeros() {
+        assertEquals("0.33", Arithmetic.evaluate("1/3"))
+        assertEquals("0.67", Arithmetic.evaluate("2/3"))
         assertEquals("2.5", Arithmetic.evaluate("5/2"))
         assertEquals("100", Arithmetic.evaluate("1000/10"))
         assertEquals("1.5", Arithmetic.evaluate("1+1/2"))
+        assertEquals("0.01", Arithmetic.evaluate("10.005-10"))
+        assertEquals("1.01", Arithmetic.evaluate("1.005+0"))
+    }
+
+    @Test
+    fun decimalsArePartOfTheNumber() {
+        assertEquals("38250", Arithmetic.evaluate("7500*5.1"))
+        assertEquals("38250", Arithmetic.evaluate("7500＊5．1"))
+        assertEquals("3.5", Arithmetic.evaluate("1.5+2"))
+        assertEquals("1", Arithmetic.evaluate(".5*2"))
+        assertNull(Arithmetic.evaluate("12+3."))
+        assertNull(Arithmetic.evaluate("1.2.3+1"))
+        assertNull(Arithmetic.evaluate("5."))
     }
 
     @Test
@@ -54,7 +67,10 @@ class ArithmeticTest {
         assertEquals("12+7=19", answer?.shown)
         assertEquals("=19", answer?.appended)
         assertEquals("=12", Arithmetic.answer("共3×2+2×3")?.appended)
-        assertNull(Arithmetic.answer("1.5+2"))
+        assertEquals("7500*5.1=38250", Arithmetic.answer("7500*5.1")?.shown)
+        assertEquals("=3.5", Arithmetic.answer("1.5+2")?.appended)
+        assertNull(Arithmetic.answer("12+3."))
+        assertEquals("=7", Arithmetic.answer("12。3+4")?.appended)
         assertNull(Arithmetic.answer("-3+5"))
         assertNull(Arithmetic.answer("1".repeat(Arithmetic.LOOK_BACK - 2) + "+1"))
         assertEquals("=20", Arithmetic.answer("12+7=19+1")?.appended)

@@ -11,6 +11,22 @@ class SyllableGraph(val start: Int, val end: Int, private val edges: Array<out L
 
     fun edgesFrom(node: Int): List<SyllableEdge> = edges.getOrNull(node).orEmpty()
 
+    /**
+     * Whole syllables can cover the input from [node] through [end]. The end itself is covered,
+     * so a reading that uses every remaining key still counts.
+     */
+    fun reachesEnd(node: Int): Boolean = node in covered.indices && covered[node]
+
+    private val covered: BooleanArray by lazy {
+        val ok = BooleanArray(end + 1)
+        if (start > end) return@lazy ok
+        ok[end] = true
+        for (node in end - 1 downTo start) {
+            ok[node] = edgesFrom(node).any { !it.partial && it.to in ok.indices && ok[it.to] }
+        }
+        ok
+    }
+
     val isEmpty: Boolean get() = edgesFrom(start).isEmpty()
 
     /** Some edge leads straight from start to end: the whole input is one syllable. */

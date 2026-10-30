@@ -34,6 +34,7 @@
     <string name="words_drive_missing">Google Drive is not installed</string>
     <string name="words_drive_sign_in">Sign in to Google Drive first</string>
     <string name="words_drive_opened">Opened Google Drive</string>
+    <string name="words_forgotten">Removed from your words</string>
 
     <string name="grid_clear">Clear</string>
     <string name="grid_page_up">Up</string>

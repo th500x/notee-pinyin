@@ -7,8 +7,10 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import com.notee.pinyin.R
 import kotlin.math.ceil
+import kotlin.math.hypot
 import kotlin.math.max
 
 /**
@@ -21,6 +23,9 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
     interface Listener {
         /** [index] is into the labels given to [show]. */
         fun onGridCandidate(index: Int)
+
+        /** A long press on a word the user has learned. The tap is not also reported. */
+        fun onForgetCandidate(index: Int)
 
         fun onGridClear()
     }
@@ -35,6 +40,7 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
     var listener: Listener? = null
 
     private var labels: List<String?> = emptyList()
+    private var learned: List<Boolean> = emptyList()
     private var screens: List<List<RectF>> = emptyList()
     private var screen = 0
 
@@ -48,20 +54,42 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
     private val sideLabels = listOf(R.string.grid_clear, R.string.grid_page_up, R.string.grid_page_down).map(context::getString)
     private val sideTargets = listOf(Target.Clear, Target.Up, Target.Down)
     private val sideRects = List(3) { RectF() }
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    private var contentRight = 0f
+    private var downX = 0f
+    private var downY = 0f
     private var pressed: Target? = null
+    private var forgot = false
+    private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+    private val longPress = Runnable {
+        val cell = pressed as? Target.Cell ?: return@Runnable
+        if (learned.getOrNull(cell.index) != true) return@Runnable
+        forgot = true
+        pressed = null
+        invalidate()
+        listener?.onForgetCandidate(cell.index)
+    }
 
-    /** Starts on the first screen. */
-    fun show(labels: List<String?>) {
+    init {
+        isClickable = true
+    }
+
+    /** Starts on the first screen, unless [resetPage] is false. */
+    fun show(labels: List<String?>, learned: List<Boolean> = emptyList(), resetPage: Boolean = true) {
         this.labels = labels
-        screen = 0
+        this.learned = learned
+        if (resetPage) screen = 0
+        removeCallbacks(longPress)
         pressed = null
         arrange()
+        screen = screen.coerceAtMost(screens.lastIndex)
         invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         screen = 0
         arrange()
+        invalidate()
     }
 
     private fun isEnabled(target: Target): Boolean = when (target) {
@@ -71,7 +99,13 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
     }
 
     private fun arrange() {
+        if (width <= 0 || height <= 0) {
+            screens = listOf(emptyList())
+            contentRight = 0f
+            return
+        }
         val areaWidth = width - sideWidth
+        contentRight = areaWidth
         val rows = max(1, (height / rowHeight).toInt())
         val columns = max(1, (areaWidth / minCellWidth).toInt())
         val cellWidth = areaWidth / columns
@@ -108,10 +142,17 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
         val first = firstIndexOf(screen)
         cells.forEachIndexed { i, rect ->
             val label = labels[first + i]
+            val index = first + i
             if (label == null) {
                 painter.label(canvas, rect, "|", textSize, painter.hintColor)
             } else {
-                painter.cap(canvas, rect, if (pressed == Target.Cell(first + i)) painter.keyPressedColor else painter.keyColor)
+                val held = pressed == Target.Cell(index)
+                val color = when {
+                    held -> painter.keyPressedColor
+                    learned.getOrNull(index) == true -> painter.activeColor
+                    else -> painter.keyColor
+                }
+                painter.cap(canvas, rect, color)
                 painter.label(canvas, rect, label, textSize, painter.textColor)
             }
         }
@@ -126,22 +167,37 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                removeCallbacks(longPress)
+                forgot = false
+                downX = event.x
+                downY = event.y
                 pressed = targetAt(event.x, event.y)
+                val cell = pressed as? Target.Cell
+                if (cell != null && learned.getOrNull(cell.index) == true) postDelayed(longPress, longPressTimeout)
                 invalidate()
             }
+            MotionEvent.ACTION_MOVE -> {
+                if (hypot(event.x - downX, event.y - downY) > touchSlop) removeCallbacks(longPress)
+            }
             MotionEvent.ACTION_UP -> {
-                val target = pressed.takeIf { it == targetAt(event.x, event.y) }
+                removeCallbacks(longPress)
+                val within = hypot(event.x - downX, event.y - downY) <= touchSlop
+                val target = if (within) pressed else pressed?.takeIf { it == targetAt(event.x, event.y) }
+                val skip = forgot
+                forgot = false
                 pressed = null
-                when (target) {
+                if (!skip) when (target) {
                     is Target.Cell -> listener?.onGridCandidate(target.index)
                     Target.Clear -> listener?.onGridClear()
-                    Target.Up -> screen--
-                    Target.Down -> screen++
+                    Target.Up -> if (screen > 0) screen--
+                    Target.Down -> if (screen < screens.lastIndex) screen++
                     null -> Unit
                 }
                 invalidate()
             }
             MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPress)
+                forgot = false
                 pressed = null
                 invalidate()
             }
@@ -149,13 +205,55 @@ class CandidateGridView @JvmOverloads constructor(context: Context, attrs: Attri
         return true
     }
 
+    override fun onDetachedFromWindow() {
+        removeCallbacks(longPress)
+        super.onDetachedFromWindow()
+    }
+
+    /**
+     * Cells own everything left of the side column, so a side rect cannot swallow a character.
+     * A point just outside a cell still counts, within the system's touch slop: a finger that
+     * lands on the cap and shifts a little must still select that character.
+     */
     private fun targetAt(x: Float, y: Float): Target? {
-        val side = sideRects.indexOfFirst { it.contains(x, y) }
+        if (x < contentRight) return cellAt(x, y)
+        val side = sideRects.indexOfFirst { contains(it, x, y) }
         if (side >= 0) return sideTargets[side].takeIf(::isEnabled)
+        return null
+    }
+
+    private fun cellAt(x: Float, y: Float): Target? {
         val cells = screens.getOrNull(screen) ?: return null
-        val i = cells.indexOfFirst { it.contains(x, y) }
-        if (i < 0) return null
-        val index = firstIndexOf(screen) + i
-        return if (labels[index] != null) Target.Cell(index) else null
+        var index = cells.indexOfFirst { contains(it, x, y) }
+        if (index < 0) {
+            var best = Float.MAX_VALUE
+            cells.forEachIndexed { i, rect ->
+                val dx = when {
+                    x < rect.left -> rect.left - x
+                    x > rect.right -> x - rect.right
+                    else -> 0f
+                }
+                val dy = when {
+                    y < rect.top -> rect.top - y
+                    y > rect.bottom -> y - rect.bottom
+                    else -> 0f
+                }
+                val dist = hypot(dx, dy)
+                if (dist <= touchSlop && dist < best) {
+                    best = dist
+                    index = i
+                }
+            }
+        }
+        if (index < 0) return null
+        val labelIndex = firstIndexOf(screen) + index
+        return if (labels.getOrNull(labelIndex) != null) Target.Cell(labelIndex) else null
+    }
+
+    /** The view's right and bottom edges count as inside, unlike [RectF.contains]. */
+    private fun contains(rect: RectF, x: Float, y: Float): Boolean {
+        val right = if (rect.right >= width) width + 1f else rect.right
+        val bottom = if (rect.bottom >= height) height + 1f else rect.bottom
+        return x >= rect.left && x < right && y >= rect.top && y < bottom
     }
 }
